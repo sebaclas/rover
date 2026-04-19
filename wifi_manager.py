@@ -33,6 +33,16 @@ def connect():
             
     print('\nConectado!')
     print('Datos de red (IP, Mascara, Gateway, DNS):', sta_if.ifconfig())
+    
+    # Sincronizar hora para HTTPS/OTA
+    try:
+        import ntptime
+        print('Sincronizando hora via NTP...')
+        ntptime.settime()
+        print('Hora sincronizada.')
+    except Exception as e:
+        print('Error sincronizando hora:', e)
+        
     return True
 
 def disconnect():
