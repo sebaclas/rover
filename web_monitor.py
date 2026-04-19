@@ -24,6 +24,11 @@ async def telemetry(request, ws):
                 cmd = data['command']
                 print(f"Comando recibido: {cmd}")
                 handle_command(cmd)
+            if 'servo' in data:
+                angle = data['servo']
+                print(f"Moviendo servo a: {angle}")
+                if rover_instance:
+                    rover_instance.set_servo_angle(angle)
         except asyncio.TimeoutError:
             pass
         except Exception as e:
