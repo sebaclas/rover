@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rover Control Panel</title>
+    <style>
+        :root {
+            --primary: #00f2fe;
+            --secondary: #4facfe;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', system-ui, sans-serif;
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .header {
+            width: 100%;
+            padding: 2rem 0;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            width: 90%;
+            max-width: 1200px;
+            padding-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .card h2 {
+            margin: 0 0 1rem 0;
+            font-size: 0.9rem;
+            opacity: 0.7;
+            text-transform: uppercase;
+        }
+
+        /* Gauge de Distancia */
+        .gauge-container {
+            position: relative;
+            width: 200px;
+            height: 100px;
+            overflow: hidden;
+        }
+
+        .gauge-bg {
+            width: 200px;
+            height: 100px;
+            border-top-left-radius: 100px;
+            border-top-right-radius: 100px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .gauge-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 200px;
+            height: 100px;
+            border-top-left-radius: 100px;
+            border-top-right-radius: 100px;
+            background: linear-gradient(180deg, var(--primary), var(--secondary));
+            transform-origin: bottom center;
+            transform: rotate(0deg);
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .gauge-value {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        /* Controles */
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 15px;
+            border: none;
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn:active {
+            transform: scale(0.9);
+            background: var(--primary);
+            box-shadow: 0 0 20px var(--primary);
+        }
+
+        .btn.stop { background: rgba(239, 68, 68, 0.2); }
+        .btn.stop:active { background: #ef4444; }
+
+        .btn-update {
+            margin-top: auto;
+            padding: 10px 20px;
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: 0.3s;
+        }
+
+        .btn-update:hover {
+            background: var(--primary);
+            color: var(--bg);
+        }
+
+        .status {
+            font-size: 0.8rem;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ef4444;
+        }
+
+        .dot.online {
+            background: #10b981;
+            box-shadow: 0 0 10px #10b981;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Rover Explorer v0.1</h1>
+    </div>
+
+    <div class="dashboard">
+        <!-- Telemetría Sonar -->
+        <div class="card">
+            <h2>Detección de Obstáculos</h2>
+            <div class="gauge-container">
+                <div class="gauge-bg"></div>
+                <div id="gauge-fill" class="gauge-fill"></div>
+                <div id="distancia" class="gauge-value">--</div>
+            </div>
+            <p style="font-size: 0.8rem; opacity: 0.6;">Centímetros</p>
+        </div>
+
+        <!-- Control de Movimiento -->
+        <div class="card">
+            <h2>Navegación Manual</h2>
+            <div class="controls">
+                <div></div>
+                <button class="btn" onmousedown="sendCommand('UP')" onmouseup="sendCommand('STOP')">▲</button>
+                <div></div>
+                <button class="btn" onmousedown="sendCommand('LEFT')" onmouseup="sendCommand('STOP')">◀</button>
+                <button class="btn stop" onclick="sendCommand('STOP')">■</button>
+                <button class="btn" onmousedown="sendCommand('RIGHT')" onmouseup="sendCommand('STOP')">▶</button>
+                <div></div>
+                <button class="btn" onmousedown="sendCommand('DOWN')" onmouseup="sendCommand('STOP')">▼</button>
+                <div></div>
+            </div>
+            <div class="status">
+                <div id="status-dot" class="dot"></div>
+                <span id="status-text">Desconectado</span>
+            </div>
+        </div>
+
+        <!-- Sistema / OTA -->
+        <div class="card">
+            <h2>Estado del Sistema</h2>
+            <p id="version-label" style="font-size: 1.2rem; font-weight: bold;">v0.1.0</p>
+            <button class="btn-update" onclick="checkUpdate()">Buscar Actualización</button>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        const distLabel = document.getElementById('distancia');
+        const gaugeFill = document.getElementById('gauge-fill');
+        const statusDot = document.getElementById('status-dot');
+        const statusText = document.getElementById('status-text');
+
+        function connect() {
+            ws = new WebSocket('ws://' + window.location.host + '/ws');
+            
+            ws.onopen = () => {
+                statusDot.classList.add('online');
+                statusText.innerText = 'Online';
+            };
+
+            ws.onclose = () => {
+                statusDot.classList.remove('online');
+                statusText.innerText = 'Offline - Reconectando...';
+                setTimeout(connect, 2000);
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if(data.distancia !== undefined) {
+                    const dist = data.distancia;
+                    distLabel.innerText = dist === -1 ? 'OFF' : dist;
+                    
+                    // Cálculo de ángulo para el gauge (0 a 180 deg)
+                    // Asumimos 200cm como maximo util
+                    const ratio = Math.min(dist / 200, 1);
+                    const angle = ratio * 180;
+                    gaugeFill.style.transform = `rotate(${angle}deg)`;
+                }
+            };
+        }
+
+        function sendCommand(cmd) {
+            if(ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({command: cmd}));
+            }
+        }
+
+        function checkUpdate() {
+            if(confirm('¿Deseas buscar y aplicar actualizaciones vía OTA? El Rover se reiniciará.')) {
+                fetch('/update').then(r => alert('Procesando actualización...'));
+            }
+        }
+
+        connect();
+    </script>
+</body>
+</html>
