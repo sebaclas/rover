@@ -276,7 +276,17 @@
             }
         }
 
+        function fetchVersion() {
+            fetch('/version')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('version-label').innerText = 'v' + data.version;
+                })
+                .catch(e => console.log('Error fetching version', e));
+        }
+
         connect();
+        fetchVersion();
     </script>
 </body>
 </html>

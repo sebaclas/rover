@@ -1,0 +1,75 @@
+{
+  "changeName": "rover-web-monitor-ota",
+  "changeDir": "C:\\Users\\sclasen\\Documents\\Archivos personales\\Antigravity\\ESP\\openspec\\changes\\rover-web-monitor-ota",
+  "schemaName": "spec-driven",
+  "contextFiles": {
+    "proposal": "C:\\Users\\sclasen\\Documents\\Archivos personales\\Antigravity\\ESP\\openspec\\changes\\rover-web-monitor-ota\\proposal.md",
+    "specs": "C:\\Users\\sclasen\\Documents\\Archivos personales\\Antigravity\\ESP\\openspec\\changes\\rover-web-monitor-ota\\specs\\**\\*.md",
+    "design": "C:\\Users\\sclasen\\Documents\\Archivos personales\\Antigravity\\ESP\\openspec\\changes\\rover-web-monitor-ota\\design.md",
+    "tasks": "C:\\Users\\sclasen\\Documents\\Archivos personales\\Antigravity\\ESP\\openspec\\changes\\rover-web-monitor-ota\\tasks.md"
+  },
+  "progress": {
+    "total": 11,
+    "complete": 0,
+    "remaining": 11
+  },
+  "tasks": [
+    {
+      "id": "1",
+      "description": "1.1 Descargar `microdot.py` y `microdot_websocket.py` para subir a la placa",
+      "done": false
+    },
+    {
+      "id": "2",
+      "description": "1.2 Crear archivo `version.json` local con `{\"version\": \"0.1.0\"}`",
+      "done": false
+    },
+    {
+      "id": "3",
+      "description": "2.1 Crear `rover.py` con la clase `Rover` que gestione el Sonar (HC-SR04)",
+      "done": false
+    },
+    {
+      "id": "4",
+      "description": "2.2 Implementar métodos `medir_distancia()` y `set_motores()` en `rover.py`",
+      "done": false
+    },
+    {
+      "id": "5",
+      "description": "3.1 Crear `index.html` con el Dashboard (Gauge de sonar y botones de control)",
+      "done": false
+    },
+    {
+      "id": "6",
+      "description": "3.2 Crear `web_monitor.py` para servir el HTML y manejar WebSockets de telemetría",
+      "done": false
+    },
+    {
+      "id": "7",
+      "description": "3.3 Implementar rutas de control en `web_monitor.py` para recibir comandos",
+      "done": false
+    },
+    {
+      "id": "8",
+      "description": "4.1 Crear `ota.py` con lógica para descargar archivos desde GitHub/URL",
+      "done": false
+    },
+    {
+      "id": "9",
+      "description": "4.2 Integrar botón de \"Update\" en la interfaz web que dispare la lógica de `ota.py`",
+      "done": false
+    },
+    {
+      "id": "10",
+      "description": "5.1 Re-escribir `main.py` usando `uasyncio` para coordinar el Rover y el Web Server",
+      "done": false
+    },
+    {
+      "id": "11",
+      "description": "5.2 Realizar pruebas de integración: acceso web, control de motores y lectura de sonar simultánea",
+      "done": false
+    }
+  ],
+  "state": "ready",
+  "instruction": "Read context files, work through pending tasks, mark complete as you go.\nPause if you hit blockers or need clarification."
+}
