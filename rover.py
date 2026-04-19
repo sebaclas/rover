@@ -19,15 +19,22 @@ class Rover:
 
     def medir_distancia(self):
         """Mide la distancia usando el HC-SR04 y devuelve cm."""
-        # --- SIMULACION PARA PRUEBAS ---
-        import math
-        # Generar una distancia que fluctúa entre 10 y 190 cm usando el tiempo
-        sim_dist = 100 + 90 * math.sin(time.ticks_ms() / 1000)
-        return round(sim_dist, 2)
+        self.trigger.value(0)
+        time.sleep_us(5)
+        self.trigger.value(1)
+        time.sleep_us(10)
+        self.trigger.value(0)
         
-        # Codigo real (comentado momentaneamente para la simulacion)
-        # self.trigger.value(0)
-        # ...
+        try:
+            # Timeout de 30ms (~5 metros)
+            pulse_time = machine.time_pulse_us(self.echo, 1, 30000)
+            if pulse_time > 0:
+                distancia = (pulse_time * 0.0343) / 2
+                return round(distancia, 2)
+            else:
+                return -1 # Fuera de rango o sin lectura
+        except OSError:
+            return -1
 
     def set_motores(self, izquierda, derecha):
         """
