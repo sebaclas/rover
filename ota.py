@@ -7,7 +7,7 @@ import json
 class OTAUpdater:
     def __init__(self, repo_url):
         self.repo_url = repo_url # Base URL de GitHub Raw
-        self.files = ['main.py', 'rover.py', 'web_monitor.py', 'index.html', 'version.json']
+        self.files = ['main.py', 'rover.py', 'web_monitor.py', 'index.html', 'version.json', 'pca9685.py', 'ota.py', 'wifi_manager.py', 'microdot_websocket.py']
 
     def check_for_update(self):
         """Compara la version local con la del servidor."""
