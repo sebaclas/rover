@@ -57,6 +57,14 @@ def handle_command(cmd):
 
 import ota
 
+@app.route('/version')
+async def get_version(request):
+    try:
+        with open('version.json', 'r') as f:
+            return json.load(f)
+    except:
+        return {'version': 'unknown'}
+
 @app.route('/update')
 async def update(request):
     # Definir la URL del repo (puedes cambiarla por la tuya de GitHub Raw)
