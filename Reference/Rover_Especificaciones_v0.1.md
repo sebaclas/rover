@@ -107,11 +107,11 @@ height="4.5007874015748035in"}
   ------------------- ----------------------------------------------------
   **Parámetro**       Valor
   **Función**         Rotar el sensor HC-SR04 para barrido lateral
-  **Tipo**            Servo estándar (por especificar modelo)
-  **Rango de giro**   Por definir (mínimo ±90° respecto al eje frontal)
-  **Control**         Canal PWM del PCA9685
+  **Tipo**            Micro servo
+  **Rango de giro**   ±90° respecto al eje frontal (180° total)
+  **Control**         Canal PWM del PCA9685 (Rango Extendido: 0.5 a 2.5ms)
   **Montaje**         Solidario al chasis, HC-SR04 fijo al eje del servo
-  **Modelo servo**    Pendiente de especificación
+  **Modelo servo**    SG90
   ------------------- ----------------------------------------------------
 
 > *📝 Decisión: el servo de sonar se controla desde el PCA9685, evitando
@@ -152,8 +152,6 @@ height="4.5007874015748035in"}
 
 **5. Pendientes y Próximos Pasos**
 
--   Especificar modelo y torque del servo de sonar.
-
 -   Definir sistema de tracción (motores DC, paso a paso, servos de
     rotación continua).
 
@@ -172,6 +170,8 @@ height="4.5007874015748035in"}
 
   -------------- ---------------------- ------------------------------------- ---------------
   **Pin GPIO**   **Función**            **Componente**                        **Dirección**
+  **GPIO 4**     SDA (I2C Datos)        Bus I2C (PCA9685, etc)                Bidireccional
+  **GPIO 5**     SCL (I2C Reloj)        Bus I2C (PCA9685, etc)                Salida (OUT)
   **GPIO 9**     TRIG (trigger sonar)   HC-SR04 (sonar ultrasonico)           Salida (OUT)
   **GPIO 10**    ECHO (eco sonar)       HC-SR04 (sonar ultrasonico)           Entrada (IN)
   **GPIO 48**    LED RGB NeoPixel       NeoPixel integrado en placa (1 LED)   Salida (OUT)

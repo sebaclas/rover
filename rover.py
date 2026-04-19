@@ -77,9 +77,10 @@ class Rover:
         angle = max(-90, min(90, angle))
         
         # Para 50Hz (20ms periodo), 12-bits = 4096 pasos.
-        # ~1ms (205) = -90 grados, ~1.5ms (307) = 0 grados, ~2ms (410) = 90 grados
+        # Servo SG90 (Rango Extendido):
+        # 0.5ms (~102) = -90 grados, 1.5ms (~307) = 0 grados, 2.5ms (~512) = 90 grados
         duty_center = 307
-        duty_range = 102
+        duty_range = 205
         
         duty = int(duty_center + (angle / 90.0) * duty_range)
         self.pca.duty(4, duty) # Usamos el Canal 4 para el servo
