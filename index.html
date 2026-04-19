@@ -181,6 +181,35 @@
             box-shadow: 0 0 10px #10b981;
         }
 
+        .servo-input-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            width: 100%;
+        }
+
+        .input-dark {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: white;
+            padding: 8px;
+            text-align: center;
+            font-size: 1rem;
+        }
+
+        .btn-small {
+            padding: 8px 15px;
+            border-radius: 10px;
+            border: none;
+            background: var(--secondary);
+            color: white;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+
     </style>
 </head>
 <body>
@@ -191,13 +220,19 @@
     <div class="dashboard">
         <!-- Telemetría Sonar -->
         <div class="card">
-            <h2>Detección de Obstáculos</h2>
+            <h2>Orientación Sonar</h2>
             <div class="gauge-container">
                 <div class="gauge-bg"></div>
                 <div id="gauge-fill" class="gauge-fill"></div>
                 <div id="distancia" class="gauge-value">--</div>
             </div>
-            <p style="font-size: 0.8rem; opacity: 0.6;">Centímetros</p>
+            <p style="font-size: 0.8rem; opacity: 0.6; margin-bottom: 5px;">Distancia (cm)</p>
+            
+            <div class="servo-input-group">
+                <input type="number" id="servo-angle" class="input-dark" value="0" min="-90" max="90">
+                <button class="btn-small" onclick="sendServo()">Girar</button>
+            </div>
+            <p style="font-size: 0.7rem; opacity: 0.4; margin-top: 5px;">-90° a +90°</p>
         </div>
 
         <!-- Control de Movimiento -->
@@ -267,6 +302,13 @@
         function sendCommand(cmd) {
             if(ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({command: cmd}));
+            }
+        }
+
+        function sendServo() {
+            const angle = document.getElementById('servo-angle').value;
+            if(ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({servo: parseInt(angle)}));
             }
         }
 
