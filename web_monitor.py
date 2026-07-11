@@ -38,10 +38,14 @@ async def telemetry(request, ws):
             sys.print_exception(e)
             # No hacemos 'break' aquí para evitar que se caiga la conexión al dashboard por un mal input
 
-        # Enviar telemetria (distancia del sonar)
+        # Enviar telemetria (distancia del sonar y datos del MPU-6050)
         if rover_instance:
             dist = rover_instance.medir_distancia()
-            await ws.send(json.dumps({'distancia': dist}))
+            mpu_data = rover_instance.leer_imu()
+            payload = {'distancia': dist}
+            if mpu_data:
+                payload['mpu'] = mpu_data
+            await ws.send(json.dumps(payload))
             
             # Pitido de alerta si detecta obstáculo a 5 cm o menos
             if 0 < dist <= 5.0:

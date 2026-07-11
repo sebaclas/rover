@@ -41,6 +41,18 @@ class Rover:
         except Exception as e:
             print("Error inicializando SSD1306 OLED:", e)
 
+        # MPU-6050 Accelerometer/Gyroscope
+        self.mpu_ready = False
+        self.mpu = None
+        if hasattr(self, 'i2c'):
+            try:
+                import mpu6050
+                self.mpu = mpu6050.MPU6050(self.i2c, addr=0x68)
+                self.mpu_ready = True
+                print("MPU-6050 inicializado en I2C (0x68).")
+            except Exception as e:
+                print("Error inicializando MPU-6050:", e)
+
         # Estado inicial del LED (apagado)
         self.set_led(0, 0, 0)
         
@@ -135,3 +147,13 @@ class Rover:
             print("Error en buzzer:", e)
         finally:
             self.buzzer_busy = False
+
+    def leer_imu(self):
+        """Lee los valores de telemetría del MPU-6050. Devuelve None si no está listo o falla."""
+        if not self.mpu_ready or self.mpu is None:
+            return None
+        try:
+            return self.mpu.get_values()
+        except Exception as e:
+            print("Error al leer MPU-6050:", e)
+            return None

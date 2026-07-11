@@ -209,6 +209,127 @@
             font-size: 0.9rem;
         }
 
+        /* MPU-6050 Card Styles */
+        .tilt-container {
+            width: 100%;
+            max-width: 220px;
+            height: 120px;
+            perspective: 300px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 15px;
+            margin-bottom: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .tilt-card {
+            width: 80px;
+            height: 140px;
+            background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(79, 172, 254, 0.25));
+            border: 2px solid var(--primary);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 10px 25px rgba(0, 242, 254, 0.2);
+            transform-style: preserve-3d;
+            transform: rotateX(0deg) rotateY(0deg);
+            transition: transform 0.15s ease-out;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+            position: relative;
+        }
+        
+        /* Ejes X/Y sobre la placa */
+        .axis {
+            position: absolute;
+            background: currentColor;
+            transform-origin: center;
+            display: flex;
+            align-items: center;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        .axis-x {
+            color: #10b981; /* Verde para X (Adelante) */
+            width: 2px;
+            height: 50px;
+            left: 50%;
+            bottom: 50%;
+            transform: translateX(-50%);
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+        .axis-x .axis-arrow {
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-bottom: 6px solid currentColor;
+            margin-bottom: 2px;
+        }
+        
+        .axis-y {
+            color: #ef4444; /* Rojo para Y (Derecha) */
+            width: 50px;
+            height: 2px;
+            left: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+            justify-content: flex-end;
+        }
+        .axis-y .axis-arrow {
+            width: 0;
+            height: 0;
+            border-top: 4px solid transparent;
+            border-bottom: 4px solid transparent;
+            border-left: 6px solid currentColor;
+            margin-left: 2px;
+        }
+        
+        .axis-label {
+            font-size: 0.6rem;
+            font-weight: 900;
+            position: absolute;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        }
+        .axis-x .axis-label {
+            top: -12px;
+        }
+        .axis-y .axis-label {
+            right: -10px;
+        }
+        
+        .tilt-card-chip {
+            width: 20px;
+            height: 20px;
+            background: #1e293b;
+            border: 1px solid #475569;
+            border-radius: 4px;
+            margin-top: -30px; /* Mover arriba para dejar libre el origen */
+            margin-bottom: 12px;
+            position: relative;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+        }
+        
+        .tilt-card-chip::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 4px;
+            height: 4px;
+            background: #ef4444;
+            border-radius: 50%;
+            box-shadow: 0 0 5px #ef4444;
+        }
 
     </style>
 </head>
@@ -255,6 +376,41 @@
             </div>
         </div>
 
+        <!-- Telemetría IMU (MPU-6050) -->
+        <div class="card">
+            <h2>Telemetría IMU (MPU-6050)</h2>
+            <div class="tilt-container">
+                <div id="tilt-card" class="tilt-card">
+                    <div class="tilt-card-chip"></div>
+                    <span style="z-index: 10; font-size: 0.65rem; opacity: 0.8; text-align: center; margin-top: 5px;">ROVER<br>IMU</span>
+                    <!-- Eje X (Verde, Adelante/Arriba) -->
+                    <div class="axis axis-x">
+                        <div class="axis-arrow"></div>
+                        <span class="axis-label">+X</span>
+                    </div>
+                    <!-- Eje Y (Rojo, Derecha) -->
+                    <div class="axis axis-y">
+                        <div class="axis-arrow"></div>
+                        <span class="axis-label">+Y</span>
+                    </div>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; text-align: center; font-size: 0.8rem;">
+                <div>
+                    <span style="display: block; opacity: 0.5; font-size: 0.65rem; text-transform: uppercase; margin-bottom: 4px;">Accel (g)</span>
+                    <strong id="imu-accel" style="font-size: 0.8rem; line-height: 1.2;">X: 0.00<br>Y: 0.00<br>Z: 1.00</strong>
+                </div>
+                <div>
+                    <span style="display: block; opacity: 0.5; font-size: 0.65rem; text-transform: uppercase; margin-bottom: 4px;">Gyro (°/s)</span>
+                    <strong id="imu-gyro" style="font-size: 0.8rem; line-height: 1.2;">X: 0.0<br>Y: 0.0<br>Z: 0.0</strong>
+                </div>
+                <div>
+                    <span style="display: block; opacity: 0.5; font-size: 0.65rem; text-transform: uppercase; margin-bottom: 4px;">Temp IMU</span>
+                    <strong id="imu-temp" style="font-size: 1rem; color: #f43f5e; display: block; margin-top: 5px;">-- °C</strong>
+                </div>
+            </div>
+        </div>
+
         <!-- Sistema / OTA -->
         <div class="card">
             <h2>Estado del Sistema</h2>
@@ -286,6 +442,8 @@
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
+                
+                // Distancia Sonar
                 if(data.distancia !== undefined) {
                     const dist = data.distancia;
                     distLabel.innerText = dist === -1 ? 'OFF' : dist;
@@ -295,6 +453,43 @@
                     const ratio = Math.min(dist / 200, 1);
                     const angle = ratio * 180;
                     gaugeFill.style.transform = `rotate(${angle}deg)`;
+                }
+
+                // Telemetría MPU-6050
+                if(data.mpu !== undefined) {
+                    const mpu = data.mpu;
+                    
+                    // Actualizar etiquetas numéricas
+                    document.getElementById('imu-accel').innerHTML = 
+                        `X: ${mpu.accel.x.toFixed(2)}<br>` +
+                        `Y: ${mpu.accel.y.toFixed(2)}<br>` +
+                        `Z: ${mpu.accel.z.toFixed(2)}`;
+                        
+                    document.getElementById('imu-gyro').innerHTML = 
+                        `X: ${mpu.gyro.x.toFixed(1)}<br>` +
+                        `Y: ${mpu.gyro.y.toFixed(1)}<br>` +
+                        `Z: ${mpu.gyro.z.toFixed(1)}`;
+                        
+                    document.getElementById('imu-temp').innerText = `${mpu.temp.toFixed(1)} °C`;
+                    
+                    // Calcular inclinación (Pitch & Roll) basados en fuerzas de gravedad
+                    const ax = mpu.accel.x;
+                    const ay = mpu.accel.y;
+                    const az = mpu.accel.z;
+                    
+                    // Fórmulas estándar de Pitch y Roll en grados
+                    let roll = Math.atan2(ay, az) * (180 / Math.PI);
+                    let pitch = Math.atan2(-ax, Math.sqrt(ay * ay + az * az)) * (180 / Math.PI);
+                    
+                    // Limitar ángulos para evitar giros drásticos 3D
+                    roll = Math.max(-45, Math.min(45, roll));
+                    pitch = Math.max(-45, Math.min(45, pitch));
+                    
+                    // Aplicar rotación 3D a la placa visual en la interfaz
+                    const tiltCard = document.getElementById('tilt-card');
+                    if(tiltCard) {
+                        tiltCard.style.transform = `rotateX(${pitch}deg) rotateY(${roll}deg)`;
+                    }
                 }
             };
         }
