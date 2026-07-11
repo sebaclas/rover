@@ -2,6 +2,7 @@ from microdot_asyncio import Microdot, send_file
 from microdot_websocket import with_websocket
 import uasyncio as asyncio
 import json
+import time
 
 app = Microdot()
 rover_instance = None
@@ -28,17 +29,26 @@ async def telemetry(request, ws):
                 angle = data['servo']
                 print(f"Moviendo servo a: {angle}")
                 if rover_instance:
-                    rover_instance.set_servo_angle(angle)
+                    rover_instance.set_servo_angle(int(angle) if angle is not None else 0)
         except asyncio.TimeoutError:
             pass
         except Exception as e:
+            import sys
             print(f"WS Error: {e}")
-            break
+            sys.print_exception(e)
+            # No hacemos 'break' aquí para evitar que se caiga la conexión al dashboard por un mal input
 
         # Enviar telemetria (distancia del sonar)
         if rover_instance:
             dist = rover_instance.medir_distancia()
             await ws.send(json.dumps({'distancia': dist}))
+            
+            # Pitido de alerta si detecta obstáculo a 5 cm o menos
+            if 0 < dist <= 5.0:
+                now = time.ticks_ms()
+                if time.ticks_diff(now, rover_instance.last_warning_beep) > 2000:
+                    rover_instance.last_warning_beep = now
+                    asyncio.create_task(rover_instance.beep(1000, 150))
             
         await asyncio.sleep(0.2) # Frecuencia de actualizacion
 

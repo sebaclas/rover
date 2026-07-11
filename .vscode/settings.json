@@ -3,6 +3,6 @@
     "python.analysis.extraPaths": [
         "./.venv/Lib/site-packages"
     ],
-    "python.languageServer": "Pylance",
+    "python.languageServer": "Jedi",
     "python.analysis.typeCheckingMode": "basic"
 }

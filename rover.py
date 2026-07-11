@@ -2,17 +2,27 @@ import machine
 import time
 import neopixel
 import pca9685
+import ssd1306
+import uasyncio as asyncio
+import array
 
 class Rover:
     def __init__(self):
         # Configuracion de pines segun especificaciones
-        self.trigger = machine.Pin(9, machine.Pin.OUT)
-        self.echo = machine.Pin(10, machine.Pin.IN)
         self.pixel = neopixel.NeoPixel(machine.Pin(48), 1)
         
-        # Inicialización del bus I2C y PCA9685
+        # Estado del módulo de audio (Buzzer)
+        self.buzzer_busy = False
+        self.last_warning_beep = 0
+        
+        # Inicialización del bus I2C, PCA9685 y SSD1306
+        self.pca_ready = False
+        self.oled_ready = False
+        
         try:
             self.i2c = machine.I2C(0, scl=machine.Pin(5), sda=machine.Pin(4), freq=400000)
+            
+            # PCA9685
             self.pca = pca9685.PCA9685(self.i2c, 0x40)
             self.pca.freq(50) # Frecuencia típica para control de servos y PWM motores
             self.pca_ready = True
@@ -20,10 +30,24 @@ class Rover:
             print("PCA9685 inicializado en I2C.")
         except Exception as e:
             print("Error inicializando PCA9685:", e)
-            self.pca_ready = False
+
+        try:
+            # SSD1306 OLED (128x64)
+            self.oled = ssd1306.SSD1306_I2C(128, 64, self.i2c, addr=0x3C)
+            self.oled.fill(0)
+            self.oled.show()
+            self.oled_ready = True
+            print("SSD1306 OLED inicializado en I2C (0x3C).")
+        except Exception as e:
+            print("Error inicializando SSD1306 OLED:", e)
 
         # Estado inicial del LED (apagado)
         self.set_led(0, 0, 0)
+        
+        # Inicialización del sensor ultrasónico (Trig/Echo GPIO)
+        self.trig = machine.Pin(9, machine.Pin.OUT)
+        self.echo = machine.Pin(10, machine.Pin.IN)
+        self.trig.off()
         
     def set_led(self, r, g, b):
         """Controla el NeoPixel integrado (RGB)."""
@@ -31,22 +55,31 @@ class Rover:
         self.pixel.write()
 
     def medir_distancia(self):
-        """Mide la distancia usando el HC-SR04 y devuelve cm."""
-        self.trigger.value(0)
-        time.sleep_us(5)
-        self.trigger.value(1)
-        time.sleep_us(10)
-        self.trigger.value(0)
-        
+        """Mide la distancia usando el sensor ultrasónico en modo GPIO (Trig/Echo)."""
         try:
-            # Timeout de 30ms (~5 metros)
-            pulse_time = machine.time_pulse_us(self.echo, 1, 30000)
-            if pulse_time > 0:
-                distancia = (pulse_time * 0.0343) / 2
+            # 1. Asegurar TRIG en bajo
+            self.trig.off()
+            time.sleep_us(2)
+            # 2. Enviar pulso de disparo de 10us
+            self.trig.on()
+            time.sleep_us(10)
+            self.trig.off()
+            
+            # 3. Medir el ancho de pulso en ECHO (timeout de 30000us ~ 5 metros)
+            duration = machine.time_pulse_us(self.echo, 1, 30000)
+            
+            if duration < 0:
+                return -1 # Timeout o error de lectura
+            
+            # 4. Calcular distancia en cm: (tiempo_us * velocidad_sonido_cm_us) / 2
+            distancia = (duration * 0.0343) / 2
+            
+            # El sensor tiene un rango útil de 2cm a 400cm
+            if 2.0 <= distancia <= 400.0:
                 return round(distancia, 2)
             else:
-                return -1 # Fuera de rango o sin lectura
-        except OSError:
+                return -1 # Fuera de rango
+        except Exception:
             return -1
 
     def set_motores(self, izquierda, derecha):
@@ -78,9 +111,27 @@ class Rover:
         
         # Para 50Hz (20ms periodo), 12-bits = 4096 pasos.
         # Servo SG90 (Rango Extendido):
-        # 0.5ms (~102) = -90 grados, 1.5ms (~307) = 0 grados, 2.5ms (~512) = 90 grados
+        # El límite teórico es ~102 a ~512, pero usamos un rango ligeramente menor (195)
+        # para evitar el tope físico mecánico que ocasiona vibración en los extremos.
         duty_center = 307
-        duty_range = 205
+        duty_range = 195
         
         duty = int(duty_center + (angle / 90.0) * duty_range)
         self.pca.duty(4, duty) # Usamos el Canal 4 para el servo
+
+    async def beep(self, freq=None, duration_ms=100):
+        """Genera un pitido asíncrono y no bloqueante en el buzzer activo (GPIO 16).
+        El parámetro freq se conserva por compatibilidad de firma pero se ignora.
+        """
+        if self.buzzer_busy:
+            return
+        self.buzzer_busy = True
+        try:
+            buzzer = machine.Pin(16, machine.Pin.OUT)
+            buzzer.on()
+            await asyncio.sleep_ms(duration_ms)
+            buzzer.off()
+        except Exception as e:
+            print("Error en buzzer:", e)
+        finally:
+            self.buzzer_busy = False
