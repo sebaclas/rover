@@ -107,9 +107,15 @@ async def get_version(request):
 @app.route('/update')
 async def update(request):
     REPO_URL = "https://raw.githubusercontent.com/sebaclas/rover/main"
-    print("Disparando actualizacion OTA...")
-    ota.run_ota(REPO_URL)
+    print("Disparando actualizacion OTA asincrona...")
+    asyncio.create_task(trigger_ota(REPO_URL))
     return {'status': 'updating'}
+
+async def trigger_ota(repo_url):
+    await asyncio.sleep(1) # Esperar a que se envie la respuesta HTTP al cliente
+    gc.collect()
+    ota.run_ota(repo_url)
+
 
 async def start_server(rover):
     global rover_instance

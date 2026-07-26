@@ -3,6 +3,7 @@ import network
 import urequests
 import os
 import json
+import gc
 
 class OTAUpdater:
     def __init__(self, repo_url):
@@ -12,10 +13,12 @@ class OTAUpdater:
     def check_for_update(self):
         """Compara la version local con la del servidor."""
         print("Buscando actualizaciones...")
+        gc.collect()
         try:
             r = urequests.get(f"{self.repo_url}/version.json")
             online_version = r.json()['version']
             r.close()
+            gc.collect()
             
             with open('version.json', 'r') as f:
                 local_version = json.load(f)['version']
@@ -34,20 +37,24 @@ class OTAUpdater:
         print("Iniciando descarga de archivos...")
         for file in self.files:
             try:
-                print(f"Descargando {file}...")
+                gc.collect()
+                print(f"Descargando {file}... RAM libre: {gc.mem_free()} bytes")
                 r = urequests.get(f"{self.repo_url}/{file}")
                 if r.status_code == 200:
                     with open(file, 'w') as f:
                         f.write(r.text)
                 r.close()
+                gc.collect()
             except Exception as e:
                 print(f"Error descargando {file}: {e}")
                 return False
         
-        print("Actualizacion completada. Reiniciando...")
+        print("Actualización completada con éxito. Reiniciando en 1s...")
+        gc.collect()
         machine.reset()
 
 def run_ota(repo_url):
     updater = OTAUpdater(repo_url)
     if updater.check_for_update():
         updater.update_and_reset()
+
