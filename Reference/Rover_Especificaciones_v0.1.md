@@ -31,11 +31,14 @@ El sistema se compone de dos unidades de procesamiento principales:
 ### 2.1 Bus I2C Compartido e Interfaz de Sensores
 
 Para optimizar el conexionado y el uso de pines GPIO, los periféricos principales se distribuyen de la siguiente manera:
-1.  **Bus I2C Compartido**: La pantalla OLED SSD1306 y el controlador PWM PCA9685 comparten un único bus I2C (`GPIO 4` y `GPIO 5`) conectado a través de una bornera distribuidora. En el futuro, el acelerómetro/giróscopo (IMU) compartirá este mismo bus I2C, reservando el `GPIO 6` en caso de que requiera línea de interrupción.
-2.  **Interfaz Directa GPIO**: El sensor de distancia ultrasónico RCWL-9610A se conecta directamente a pines GPIO dedicados (`GPIO 9` para TRIG y `GPIO 10` para ECHO) para evitar problemas de bus y latencias.
+1.  **Bus I2C Compartido**: La pantalla OLED SSD1306 (`0x3C`), el controlador PWM PCA9685 (`0x40`) y la IMU MPU-6050 (`0x68`) comparten un único bus I2C (`GPIO 4` y `GPIO 5`) conectado a través de una bornera distribuidora. El pin `GPIO 6` queda reservado como línea de interrupción (INT) de la IMU si fuera requerida.
+2.  **Interfaz Directa GPIO**: El sensor de distancia ultrasónico RCWL-9610A se conecta directamente a pines GPIO dedicados (`GPIO 9` para TRIG y `GPIO 10` para ECHO) para evitar problemas de bus e inestabilidad I2C.
 
 ### 2.2 Zumbador (Buzzer) Activo Dedicado
 Para proveer alertas sonoras y retroalimentación de estado (como el sonido de inicio o advertencias de proximidad por obstáculos), el rover utiliza un zumbador (buzzer) activo conectado a un pin GPIO dedicado del ESP32-S3 (`GPIO 16`). Esto simplifica el sistema de audio, reduciendo el consumo de RAM/Flash al eliminar el subsistema I2S y la reproducción de archivos WAV, liberando además los pines `GPIO 17` y `GPIO 18`.
+
+### 2.3 IMU MPU-6050 y Navegación Asistida
+El acelerómetro y giróscopo de 6 ejes MPU-6050 está completamente integrado al bus I2C compartiendo la dirección `0x68`. Proporciona telemetría de orientación tridimensional en tiempo real (Pitch, Roll, Yaw) al Dashboard Web y permite ejecutar giros automatizados de alta precisión (`girar_grados`) mediante la integración temporal de velocidad angular (giroscopio eje Z) a 50 Hz. Las maniobras de giro incluyen un escaneo sonar previo ("Look-Before-Turn") a ±70° y un lazo de monitoreo frontal para parada de emergencia ante obstáculos.
 
 El conexionado general se realiza de la siguiente forma (usando tracción y giro diferencial con dos motores independientes mediante el driver de motores DRV8833 y sin servo de dirección física):
 
@@ -103,7 +106,7 @@ flowchart TD
         drv_gnd["GND"]
     end
 
-    subgraph IMU ["IMU (Futuro Acel/Giro)"]
+    subgraph IMU ["IMU MPU-6050 (0x68)"]
         imu_sda["SDA"]
         imu_scl["SCL"]
         imu_int["INT"]
@@ -259,14 +262,14 @@ flowchart TD
   **Parámetro**       Valor
   **Función**         Rotar el sensor HC-SR04 para barrido lateral
   **Tipo**            Micro servo
-  **Rango de giro**   ±90° respecto al eje frontal (180° total)
-  **Control**         Canal PWM del PCA9685 (Rango Extendido: 0.5 a 2.5ms)
+  **Rango de giro**   ±70° respecto al eje frontal (140° útil acotado por software)
+  **Control**         Canal 4 PWM del PCA9685 (Rango seguro: duty center 307 ± 145)
+  **Estrategia**      Movimiento asíncrono suave (`set_servo_angle_smooth`) en pasos de 5° y auto-apagado de señal PWM (`apagar_servo`) al finalizar posicionamiento
   **Montaje**         Solidario al chasis, HC-SR04 fijo al eje del servo
   **Modelo servo**    SG90
   ------------------- ----------------------------------------------------
 
-> *📝 Decisión: el servo de sonar se controla desde el PCA9685, evitando
-> usar pines PWM directos del ESP32-S3.*
+> *📝 Decisión: el servo de sonar se controla desde el PCA9685 en Canal 4. Para evitar picos de corriente, calentamiento o brownouts provocados por topes mecánicos o estado de sostenimiento ("stall"), se restringe la excursión a ±70°, se aplica un movimiento suavizado por pasos asíncronos y se apaga el pulso PWM tras cada movimiento.*
 
 **3.5 Unidad de Cámara**
 
@@ -340,6 +343,39 @@ flowchart TD
 
 > *📝 Decisión: El uso del puente H DRV8833 permite el control bidireccional y de velocidad (PWM) de los dos motores DC utilizando canales dedicados del PCA9685. Esto evita consumir pines de alta corriente o PWM directos del ESP32-S3.*
 
+**3.9 Acelerómetro / Giróscopo IMU**
+
+**MPU-6050 --- Sensor de Inercia de 6 Ejes (6-DOF)**
+
+  ---------------------------- -------------------------------------------------
+  **Parámetro**                Valor
+  **Modelo**                   MPU-6050
+  **Interfaz con MCU**         I2C
+  **Dirección I2C base**       0x68 (AD0 a GND)
+  **Acelerómetro**             3 ejes, escala ±2g (sensibilidad 16384 LSB/g)
+  **Giróscopo**                3 ejes, escala ±250°/s (sensibilidad 131 LSB/°/s)
+  **Sensor de Temperatura**    Integrado (-40°C a +85°C)
+  **Tensión de alimentación**  3.3 V
+  **Pin de interrupción**      GPIO 6 (opcional / reservado)
+  **Uso en el proyecto**       Telemetría 3D de orientación (Pitch/Roll) en Dashboard Web y giros automatizados de precisión asistidos por giroscopio (`girar_grados`)
+  ---------------------------- -------------------------------------------------
+
+> *📝 Decisión: La IMU MPU-6050 se encuentra totalmente integrada en la dirección I2C 0x68. Proporciona telemetría angular 3D en tiempo real y permite rotaciones precisas sin desplazamiento por deslizamiento de ruedas.*
+
+**3.10 Servidor Web Async, Telemetría y Dashboard 3D**
+
+**Microdot Asyncio --- Servidor Web HTTP, WebSockets y Dashboard**
+
+  ---------------------------- -------------------------------------------------
+  **Parámetro**                Valor
+  **Servidor HTTP**            Microdot Asyncio en Puerto 80
+  **WebSockets**               `/ws` para envío continuo de telemetría (~5Hz) y recepción de comandos
+  **Interfaz Dashboard**       Single Page App (SPA) HTML5/JS con visor 3D de la IMU, control por teclado (flechas / WASD), botones de giro rápido 90° e indicador de RAM
+  **Actualizaciones OTA**      Endpoint `/update` para flasheo remoto Over-The-Air desde repositorio GitHub
+  ---------------------------- -------------------------------------------------
+
+> *📝 Decisión: La arquitectura asíncrona basada en Microdot permite transmitir telemetría y responder a comandos en tiempo real sin bloquear los bucles de control de motores, sonar o seguridad.*
+
 **4. Decisiones de Diseño**
 
   ----------------------------- -------------------------------------------------------------------------------------
@@ -350,37 +386,36 @@ flowchart TD
   **ESP32-CAM separado**        Delega el procesamiento de imagen a una unidad dedicada, no satura el MCU principal
   **Sonar por GPIO (Trig/Echo)** Sonar en GPIO 9 (TRIG) y GPIO 10 (ECHO) usando el método tradicional tras comprobar inestabilidad técnica por bus I2C
   **Buzzer Activo (GPIO 16)**   Uso de zumbador activo simple en GPIO 16 en lugar de I2S (MAX98357A) para simplificar software/hardware y liberar pines GPIO 17 y 18
-  **IMU en I2C Compartido**     Conectar el acelerómetro/giróscopo al bus I2C común (GPIO 4/5) y reservar GPIO 6 para interrupción
+  **IMU MPU-6050 en I2C (0x68)** Conectar el acelerómetro/giróscopo al bus I2C común (`GPIO 4`/`5`) para telemetría 3D y giros asistidos por giroscopio
   **Puente H DRV8833**          Control de motores traseros DC usando 2 canales PWM del PCA9685 por motor para velocidad, sentido y freno activo
+  **Protección PWM Servo**      Movimiento suavizado por pasos asíncronos en rango acotado [-70°, 70°] y apagado automático de señal PWM al finalizar para prevenir brownouts y desgaste
+  **Giro Controlado Gyro Z**    Lazo de integración angular a 50Hz con calibración inicial de offset, escaneo preventivo "Look-Before-Turn" y freno de emergencia por sonar frontal
+  **Web Server Microdot & WS**  Servidor HTTP/WebSocket asíncrono para telemetría en vivo, dashboard con visor 3D, control por teclado y soporte de actualización OTA
   ----------------------------- -------------------------------------------------------------------------------------
 
 **5. Pendientes y Próximos Pasos**
 
--   Definir detalles de control y alimentación de motores DC de tracción trasera (giro diferencial, sin dirección física).
-
--   Definir protocolo de comunicación ESP32-S3 ↔ ESP32-CAM.
-
--   Especificar sistema de alimentación (baterías, reguladores,
-    distribución de potencia).
-
--   Definir chasis y estructura mecánica.
-
--   Agregar diagrama de bloques del sistema.
+-   [x] Definir control y alimentación de motores DC de tracción trasera (giro diferencial con puente H DRV8833). *(Completado v0.6)*
+-   [x] Integración de IMU MPU-6050 y giros de precisión asistidos por giroscopio. *(Completado v0.7)*
+-   [x] Servidor Web de monitoreo en tiempo real, telemetría 3D y soporte OTA. *(Completado v0.7)*
+-   Definir protocolo de comunicación ESP32-S3 ↔ ESP32-CAM (streaming de video).
+-   Especificar chasis definitivo y gestión integrada de batería LiPo / sensores de voltaje.
+-   Agregar diagrama de bloques simplificado del sistema.
 
 **6. Asignación de Pines del ESP32-S3**
 
-  -------------- ---------------------- --------------------------------------------- ---------------
-  **Pin GPIO**   **Función**            **Componente**                                **Dirección**
-  **GPIO 4**     SDA (I2C Datos)        Bus I2C Compartido (PCA9685, SSD1306, IMU)    Bidireccional
-  **GPIO 5**     SCL (I2C Reloj)        Bus I2C Compartido (PCA9685, SSD1306, IMU)    Salida (OUT)
-  **GPIO 6**     INT (Interrupción)     Reservado para acelerómetro/giróscopo (IMU)   Entrada (IN)
-  **GPIO 9**     TRIG Sonar             Sensor Ultrasónico RCWL-9610A (Método Trad.)  Salida (OUT)
-  **GPIO 10**    ECHO Sonar             Sensor Ultrasónico RCWL-9610A (Método Trad.)  Entrada (IN)
-  **GPIO 16**    Buzzer (Alarma)        Zumbador (Buzzer) Activo                      Salida (OUT)
-  **GPIO 17**    Libre                  N/A                                           -
-  **GPIO 18**    Libre                  N/A                                           -
-  **GPIO 48**    LED RGB NeoPixel       NeoPixel integrado en placa (1 LED)           Salida (OUT)
-  -------------- ---------------------- --------------------------------------------- ---------------
+  -------------- ---------------------- ---------------------------------------------------- ---------------
+  **Pin GPIO**   **Función**            **Componente**                                       **Dirección**
+  **GPIO 4**     SDA (I2C Datos)        Bus I2C Compartido (PCA9685, SSD1306, MPU-6050)      Bidireccional
+  **GPIO 5**     SCL (I2C Reloj)        Bus I2C Compartido (PCA9685, SSD1306, MPU-6050)      Salida (OUT)
+  **GPIO 6**     INT (Interrupción)     Reservado para acelerómetro/giróscopo (MPU-6050)    Entrada (IN)
+  **GPIO 9**     TRIG Sonar             Sensor Ultrasónico RCWL-9610A (Método Tradicional)   Salida (OUT)
+  **GPIO 10**    ECHO Sonar             Sensor Ultrasónico RCWL-9610A (Método Tradicional)   Entrada (IN)
+  **GPIO 16**    Buzzer (Alarma)        Zumbador (Buzzer) Activo                             Salida (OUT)
+  **GPIO 17**    Libre                  N/A                                                  -
+  **GPIO 18**    Libre                  N/A                                                  -
+  **GPIO 48**    LED RGB NeoPixel       NeoPixel integrado en placa (1 LED)                  Salida (OUT)
+  -------------- ---------------------- ---------------------------------------------------- ---------------
 
 **7. Historial de Revisiones**
 
@@ -392,4 +427,5 @@ flowchart TD
   **0.4 --- Jul 2026**   Eliminación de servo de dirección física. Configuración de giro diferencial usando motores traseros independientes.
   **0.5 --- Jul 2026**   Adición de especificación de audio con módulo amplificador I2S MAX98357A y altavoz de 8Ω, asignando los pines GPIO 16, 17 y 18. Previsión de bus I2C compartido para IMU y reserva de GPIO 6 como interrupción.
   **0.6 --- Jul 2026**   Simplificación de audio: reemplazo de I2S MAX98357A por un buzzer activo en GPIO 16, liberando GPIO 17 y 18. Confirmación definitiva de sonar por método GPIO tradicional por imposibilidad de hacerlo andar estable en I2C. Adición de especificación del driver de motor DC DRV8833 controlado con 2 canales del PCA9685 por motor.
+  **0.7 --- Jul 2026**   Integración completa de IMU MPU-6050 (0x68) para telemetría 3D y giros automatizados asistidos por giroscopio (`girar_grados` con escaneo preventivo sonar y parada de emergencia frontal). Protección de servo sonar (SG90) limitando el rango seguro a ±70°, movimiento asíncrono suave por pasos y auto-apagado de pulso PWM. Servidor Web Microdot con WebSocket, telemetría en vivo, control por teclado y soporte OTA.
   ---------------------- -----------------------------------------------------------------------------------------------------

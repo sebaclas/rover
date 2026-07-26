@@ -1,0 +1,161 @@
+<mxfile host="65bd71144e">
+  <diagram id="rover_diagram" name="Conexionado Rover">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        
+        <!-- ESP32-S3 Block -->
+        <mxCell id="esp32" value="&lt;b&gt;ESP32-S3&lt;/b&gt;&lt;br&gt;(Unidad Principal)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2c3e50;fontColor=#ffffff;strokeColor=#34495e;fontSize=14;align=center;verticalAlign=top;spacingTop=10;" parent="1" vertex="1">
+          <mxGeometry x="40" y="80" width="160" height="240" as="geometry" />
+        </mxCell>
+        
+        <!-- ESP32 Pins as sub-elements inside the ESP32 block -->
+        <mxCell id="pin_sda" value="GPIO 4 (SDA)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#ffffff;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="50" y="120" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="pin_scl" value="GPIO 5 (SCL)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#ffffff;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="50" y="150" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="pin_trig" value="GPIO 9 (TRIG)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#ffffff;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="50" y="190" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="pin_echo" value="GPIO 10 (ECHO)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#ffffff;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="50" y="220" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="pin_3v3" value="3.3V" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#ff4d4d;fontStyle=1;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="50" y="260" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="pin_gnd" value="GND" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#bdc3c7;fontStyle=1;fontSize=11;" parent="1" vertex="1">
+          <mxGeometry x="50" y="290" width="140" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Bornera I2C (Distribuidor) -->
+        <mxCell id="bornera" value="&lt;b&gt;BORNERA I2C&lt;/b&gt;&lt;br&gt;(Distribuidor)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#7f8c8d;fontColor=#ffffff;strokeColor=#95a5a6;align=center;" parent="1" vertex="1">
+          <mxGeometry x="320" y="100" width="140" height="70" as="geometry" />
+        </mxCell>
+
+        <!-- RCWL-9610A (Sonar) -->
+        <mxCell id="sonar" value="&lt;b&gt;RCWL-9610A&lt;/b&gt;&lt;br&gt;(Sensor Sonar)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#16a085;fontColor=#ffffff;strokeColor=#1abc9c;align=center;" parent="1" vertex="1">
+          <mxGeometry x="560" y="180" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- OLED SSD1306 -->
+        <mxCell id="oled" value="&lt;b&gt;OLED SSD1306&lt;/b&gt;&lt;br&gt;(0x3C)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e272e;fontColor=#00d8d6;strokeColor=#05c46b;align=center;" parent="1" vertex="1">
+          <mxGeometry x="420" y="300" width="120" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- PCA9685 -->
+        <mxCell id="pca" value="&lt;b&gt;PCA9685&lt;/b&gt;&lt;br&gt;(0x40)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#3498db;fontColor=#ffffff;strokeColor=#2980b9;align=center;" parent="1" vertex="1">
+          <mxGeometry x="240" y="300" width="120" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Actuators (Servos & Motors - Differential Drive) -->
+        <mxCell id="servo_sonar" value="Servo Sonar&lt;br&gt;(Canal 4)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d35400;fontColor=#ffffff;strokeColor=#e67e22;fontSize=10;align=center;" parent="1" vertex="1">
+          <mxGeometry x="140" y="420" width="100" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="motor_izq" value="Motor Izquierdo&lt;br&gt;(Canal 0)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d35400;fontColor=#ffffff;strokeColor=#e67e22;fontSize=10;align=center;" parent="1" vertex="1">
+          <mxGeometry x="260" y="420" width="100" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="motor_der" value="Motor Derecho&lt;br&gt;(Canal 1)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d35400;fontColor=#ffffff;strokeColor=#e67e22;fontSize=10;align=center;" parent="1" vertex="1">
+          <mxGeometry x="380" y="420" width="100" height="45" as="geometry" />
+        </mxCell>
+
+        <!-- Connection lines -->
+        <!-- I2C Bus from ESP32 to Bornera -->
+        <mxCell id="conn_sda" value="SDA" style="endArrow=classic;html=1;rounded=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;strokeColor=#f1c40f;strokeWidth=2;fontSize=10;" parent="1" source="pin_sda" target="bornera" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="conn_scl" value="SCL" style="endArrow=classic;html=1;rounded=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.75;entryDx=0;entryDy=0;strokeColor=#e67e22;strokeWidth=2;fontSize=10;" parent="1" source="pin_scl" target="bornera" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- I2C from Bornera to PCA9685 -->
+        <mxCell id="conn_born_pca" value="I2C Bus" style="endArrow=classic;html=1;rounded=1;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#f39c12;strokeWidth=2;fontSize=10;" parent="1" source="bornera" target="pca" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="355" y="240" />
+              <mxPoint x="300" y="240" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- I2C from Bornera to OLED -->
+        <mxCell id="conn_born_oled" value="I2C Bus" style="endArrow=classic;html=1;rounded=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#f39c12;strokeWidth=2;fontSize=10;" parent="1" source="bornera" target="oled" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="425" y="240" />
+              <mxPoint x="480" y="240" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Sonar Trig/Echo directly connected to ESP32-S3 -->
+        <mxCell id="conn_trig" value="TRIG" style="endArrow=classic;html=1;rounded=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.25;entryDx=0;entryDy=0;strokeColor=#2ecc71;strokeWidth=2;fontSize=10;" parent="1" source="pin_trig" target="sonar" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="280" y="200" />
+              <mxPoint x="520" y="200" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="conn_echo" value="ECHO" style="endArrow=classic;html=1;rounded=1;exitX=0;exitY=0.75;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#9b59b6;strokeWidth=2;fontSize=10;" parent="1" source="sonar" target="pin_echo" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="520" y="240" />
+              <mxPoint x="280" y="230" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Sonar Power (3.3V and GND) -->
+        <mxCell id="conn_sonar_vcc" value="3.3V" style="endArrow=classic;html=1;rounded=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#e74c3c;strokeDashArray=5;strokeWidth=1;fontSize=8;" parent="1" source="pin_3v3" target="sonar" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="220" y="270" />
+              <mxPoint x="220" y="250" />
+              <mxPoint x="540" y="250" />
+              <mxPoint x="540" y="220" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="conn_sonar_gnd" value="GND" style="endArrow=classic;html=1;rounded=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.85;entryDx=0;entryDy=0;strokeColor=#7f8c8d;strokeDashArray=5;strokeWidth=1;fontSize=8;" parent="1" source="pin_gnd" target="sonar" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="230" y="300" />
+              <mxPoint x="230" y="260" />
+              <mxPoint x="550" y="260" />
+              <mxPoint x="550" y="248" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- PCA9685 Outputs to Servos/Motors -->
+        <mxCell id="conn_pca_s_sonar" value="" style="endArrow=classic;html=1;rounded=1;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#e67e22;strokeWidth=1.5;" parent="1" source="pca" target="servo_sonar" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="270" y="380" />
+              <mxPoint x="190" y="380" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="conn_pca_m_izq" value="" style="endArrow=classic;html=1;rounded=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#e67e22;strokeWidth=1.5;" parent="1" source="pca" target="motor_izq" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="300" y="380" />
+              <mxPoint x="310" y="380" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="conn_pca_m_der" value="" style="endArrow=classic;html=1;rounded=1;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#e67e22;strokeWidth=1.5;" parent="1" source="pca" target="motor_der" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="330" y="380" />
+              <mxPoint x="430" y="380" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

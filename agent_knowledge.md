@@ -20,3 +20,12 @@
   2. If there are uncommitted changes, the agent MUST explicitly remind the user of these pending changes and suggest making a git commit before starting the new task.
   3. The agent can recommend using the Conventional Commits conventional style or the `git-commit` skill.
 
+## ESP32 Serial REPL & Uploading (USB CDC)
+- **Constraint / Issue**: ESP32-S3 Native USB CDC ports do not respond to `mpremote` or standard raw REPL attempts if DTR/RTS are disabled or if the board is running a tight `uasyncio` loop.
+- **Actionable Guideline**: Always open the serial port with `dtr=True` and `rts=True`, spam `\x03` (Ctrl-C) to break execution, then send `\x01` (Ctrl-A) for Raw REPL. Write files in base64 chunks (`ubinascii.a2b_base64`) to prevent memory allocation errors on target.
+
+## MicroPython Async OTA Updates
+- **Constraint / Issue**: Running `urequests.get()` for HTTPS raw GitHub files inside an active Microdot HTTP handler causes memory allocation failures (RAM exhaustion) due to SSL socket buffers.
+- **Actionable Guideline**: Always trigger OTA updates asynchronously via `asyncio.create_task()` with a delay (`await asyncio.sleep(1)`), allowing Microdot to complete HTTP response sending and perform `gc.collect()` before initiating HTTPS requests.
+
+
