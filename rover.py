@@ -144,10 +144,10 @@ class Rover:
                 pass
 
     def set_servo_angle_direct(self, angle):
-        """Establece el ángulo del servo directamente (-70 a 70 grados)."""
+        """Establece el ángulo del servo directamente (-85 a 85 grados)."""
         if not self.pca_ready:
             return
-        angle = max(-70, min(70, angle))
+        angle = max(-85, min(85, angle))
         duty_center = 307
         duty_range = 145 # Rango seguro acotado (~0.8ms a ~2.2ms)
         duty = int(duty_center + (angle / 90.0) * duty_range)
@@ -166,7 +166,7 @@ class Rover:
         if not self.pca_ready:
             return
             
-        target_angle = max(-70, min(70, target_angle))
+        target_angle = max(-85, min(85, target_angle))
         start_angle = getattr(self, 'current_servo_angle', 0)
         
         if start_angle == target_angle:
@@ -259,11 +259,21 @@ class Rover:
         print(f"Iniciando secuencia de giro: {target_angle} grados")
         
         # 1. Escaneo preventivo suave del sonar (Look-Before-Turn)
-        servo_angle = 70 if target_angle > 0 else -70
+        servo_angle = 85 if target_angle > 0 else -85
         await self.set_servo_angle_smooth(servo_angle)
         
-        dist = self.medir_distancia()
-        print(f"Distancia leída por pre-escaneo en {servo_angle}°: {dist} cm")
+        # Sensar durante 3 segundos en la dirección del giro para detectar obstáculos
+        dist_min = -1
+        start_time = time.ticks_ms()
+        while time.ticks_diff(time.ticks_ms(), start_time) < 3000:
+            dist_lectura = self.medir_distancia()
+            if dist_lectura > 0:
+                if dist_min == -1 or dist_lectura < dist_min:
+                    dist_min = dist_lectura
+            await asyncio.sleep_ms(100)
+            
+        dist = dist_min
+        print(f"Distancia mínima leída en pre-escaneo de 3s en {servo_angle}°: {dist} cm")
         
         if 0 < dist <= 15.0:
             print("Trayectoria de giro obstruida! Iniciando evasión...")

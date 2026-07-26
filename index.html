@@ -350,10 +350,10 @@
             <p style="font-size: 0.8rem; opacity: 0.6; margin-bottom: 5px;">Distancia (cm)</p>
             
             <div class="servo-input-group">
-                <input type="number" id="servo-angle" class="input-dark" value="0" min="-70" max="70">
+                <input type="number" id="servo-angle" class="input-dark" value="0" min="-85" max="85">
                 <button class="btn-small" onclick="sendServo()">Girar</button>
             </div>
-            <p style="font-size: 0.7rem; opacity: 0.4; margin-top: 5px;">-70° a +70°</p>
+            <p style="font-size: 0.7rem; opacity: 0.4; margin-top: 5px;">-85° a +85°</p>
         </div>
 
         <!-- Control de Movimiento -->
@@ -517,7 +517,7 @@
             const input = document.getElementById('servo-angle');
             let angle = parseInt(input.value);
             if (isNaN(angle)) angle = 0;
-            angle = Math.max(-70, Math.min(70, angle));
+            angle = Math.max(-85, Math.min(85, angle));
             input.value = angle;
             if(ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({servo: angle}));

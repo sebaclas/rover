@@ -38,7 +38,7 @@ Para optimizar el conexionado y el uso de pines GPIO, los periféricos principal
 Para proveer alertas sonoras y retroalimentación de estado (como el sonido de inicio o advertencias de proximidad por obstáculos), el rover utiliza un zumbador (buzzer) activo conectado a un pin GPIO dedicado del ESP32-S3 (`GPIO 16`). Esto simplifica el sistema de audio, reduciendo el consumo de RAM/Flash al eliminar el subsistema I2S y la reproducción de archivos WAV, liberando además los pines `GPIO 17` y `GPIO 18`.
 
 ### 2.3 IMU MPU-6050 y Navegación Asistida
-El acelerómetro y giróscopo de 6 ejes MPU-6050 está completamente integrado al bus I2C compartiendo la dirección `0x68`. Proporciona telemetría de orientación tridimensional en tiempo real (Pitch, Roll, Yaw) al Dashboard Web y permite ejecutar giros automatizados de alta precisión (`girar_grados`) mediante la integración temporal de velocidad angular (giroscopio eje Z) a 50 Hz. Las maniobras de giro incluyen un escaneo sonar previo ("Look-Before-Turn") a ±70° y un lazo de monitoreo frontal para parada de emergencia ante obstáculos.
+El acelerómetro y giróscopo de 6 ejes MPU-6050 está completamente integrado al bus I2C compartiendo la dirección `0x68`. Proporciona telemetría de orientación tridimensional en tiempo real (Pitch, Roll, Yaw) al Dashboard Web y permite ejecutar giros automatizados de alta precisión (`girar_grados`) mediante la integración temporal de velocidad angular (giroscopio eje Z) a 50 Hz. Las maniobras de giro incluyen un escaneo sonar previo ("Look-Before-Turn") a ±85° durante 3 segundos y un lazo de monitoreo frontal para parada de emergencia ante obstáculos.
 
 El conexionado general se realiza de la siguiente forma (usando tracción y giro diferencial con dos motores independientes mediante el driver de motores DRV8833 y sin servo de dirección física):
 
@@ -262,14 +262,14 @@ flowchart TD
   **Parámetro**       Valor
   **Función**         Rotar el sensor HC-SR04 para barrido lateral
   **Tipo**            Micro servo
-  **Rango de giro**   ±70° respecto al eje frontal (140° útil acotado por software)
+  **Rango de giro**   ±85° respecto al eje frontal (170° útil acotado por software)
   **Control**         Canal 4 PWM del PCA9685 (Rango seguro: duty center 307 ± 145)
   **Estrategia**      Movimiento asíncrono suave (`set_servo_angle_smooth`) en pasos de 5° y auto-apagado de señal PWM (`apagar_servo`) al finalizar posicionamiento
   **Montaje**         Solidario al chasis, HC-SR04 fijo al eje del servo
   **Modelo servo**    SG90
   ------------------- ----------------------------------------------------
 
-> *📝 Decisión: el servo de sonar se controla desde el PCA9685 en Canal 4. Para evitar picos de corriente, calentamiento o brownouts provocados por topes mecánicos o estado de sostenimiento ("stall"), se restringe la excursión a ±70°, se aplica un movimiento suavizado por pasos asíncronos y se apaga el pulso PWM tras cada movimiento.*
+> *📝 Decisión: el servo de sonar se controla desde el PCA9685 en Canal 4. Tras solucionar la alimentación del servo por hardware, la excursión se extiende a ±85°, aplicando un movimiento suavizado por pasos asíncronos y apagar el pulso PWM tras cada movimiento.*
 
 **3.5 Unidad de Cámara**
 
@@ -388,7 +388,7 @@ flowchart TD
   **Buzzer Activo (GPIO 16)**   Uso de zumbador activo simple en GPIO 16 en lugar de I2S (MAX98357A) para simplificar software/hardware y liberar pines GPIO 17 y 18
   **IMU MPU-6050 en I2C (0x68)** Conectar el acelerómetro/giróscopo al bus I2C común (`GPIO 4`/`5`) para telemetría 3D y giros asistidos por giroscopio
   **Puente H DRV8833**          Control de motores traseros DC usando 2 canales PWM del PCA9685 por motor para velocidad, sentido y freno activo
-  **Protección PWM Servo**      Movimiento suavizado por pasos asíncronos en rango acotado [-70°, 70°] y apagado automático de señal PWM al finalizar para prevenir brownouts y desgaste
+  **Protección PWM Servo**      Movimiento suavizado por pasos asíncronos en rango acotado [-85°, 85°] y apagado automático de señal PWM al finalizar para prevenir desgaste
   **Giro Controlado Gyro Z**    Lazo de integración angular a 50Hz con calibración inicial de offset, escaneo preventivo "Look-Before-Turn" y freno de emergencia por sonar frontal
   **Web Server Microdot & WS**  Servidor HTTP/WebSocket asíncrono para telemetría en vivo, dashboard con visor 3D, control por teclado y soporte de actualización OTA
   ----------------------------- -------------------------------------------------------------------------------------
