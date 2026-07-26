@@ -29,7 +29,7 @@ async def telemetry(request, ws):
                 angle = data['servo']
                 print(f"Moviendo servo a: {angle}")
                 if rover_instance:
-                    rover_instance.set_servo_angle(int(angle) if angle is not None else 0)
+                    asyncio.create_task(rover_instance.set_servo_angle_smooth(int(angle) if angle is not None else 0))
         except asyncio.TimeoutError:
             pass
         except Exception as e:
@@ -67,15 +67,15 @@ async def handle_command(cmd):
         rover_instance.active_turn_task = None
         
     if cmd == 'UP':
-        rover_instance.set_motores(80, 80)
+        rover_instance.set_motores(-80, 80) # Adelante
         rover_instance.set_led(0, 255, 0) # Verde moviendo
     elif cmd == 'DOWN':
-        rover_instance.set_motores(-80, -80)
+        rover_instance.set_motores(80, -80) # Atrás
         rover_instance.set_led(255, 165, 0) # Naranja reversa
     elif cmd == 'LEFT':
-        rover_instance.set_motores(-50, 50)
+        rover_instance.set_motores(50, 50) # Giro Izquierda
     elif cmd == 'RIGHT':
-        rover_instance.set_motores(50, -50)
+        rover_instance.set_motores(-50, -50) # Giro Derecha
     elif cmd == 'STOP':
         rover_instance.set_motores(0, 0)
         rover_instance.set_led(0, 0, 255) # Azul detenido

@@ -27,7 +27,9 @@ class Rover:
             self.pca = pca9685.PCA9685(self.i2c, 0x40)
             self.pca.freq(50) # Frecuencia típica para control de servos y PWM motores
             self.pca_ready = True
-            self.set_servo_angle(0) # Centrar servo al arrancar
+            self.current_servo_angle = 0
+            self.set_servo_angle_direct(0) # Centrar servo al arrancar
+            self.apagar_servo()
             print("PCA9685 inicializado en I2C.")
         except Exception as e:
             print("Error inicializando PCA9685:", e)
@@ -61,7 +63,7 @@ class Rover:
         self.trig = machine.Pin(9, machine.Pin.OUT)
         self.echo = machine.Pin(10, machine.Pin.IN)
         self.trig.off()
-        
+
     def set_led(self, r, g, b):
         """Controla el NeoPixel integrado (RGB)."""
         self.pixel[0] = (r, g, b)
@@ -123,30 +125,67 @@ class Rover:
           - Motor Izquierdo: Canal 0 (IN1), Canal 1 (IN2)
           - Motor Derecho: Canal 2 (IN3), Canal 3 (IN4)
         izquierda/derecha: velocidad de -100 a 100
+        Nota: El motor izquierdo tiene polaridad invertida en cableado respecto al derecho.
         """
         self._controlar_motor(0, 1, izquierda, brake)
         self._controlar_motor(2, 3, derecha, brake)
 
+    def apagar_servo(self):
+        """Desactiva el pulso PWM del servo para liberar corriente y evitar calentamiento/stall."""
+        if self.pca_ready:
+            try:
+                self.pca.duty(4, 0)
+            except Exception:
+                pass
+
+    def set_servo_angle_direct(self, angle):
+        """Establece el ángulo del servo directamente (-70 a 70 grados)."""
+        if not self.pca_ready:
+            return
+        angle = max(-70, min(70, angle))
+        duty_center = 307
+        duty_range = 145 # Rango seguro acotado (~0.8ms a ~2.2ms)
+        duty = int(duty_center + (angle / 90.0) * duty_range)
+        try:
+            self.pca.duty(4, duty)
+            self.current_servo_angle = angle
+        except Exception as e:
+            print("Error I2C en set_servo_angle:", e)
+
     def set_servo_angle(self, angle):
-        """
-        Gira el servo del HC-SR04 al ángulo especificado (-85 a 85 grados).
-        """
+        """Compatibilidad síncrona."""
+        self.set_servo_angle_direct(angle)
+
+    async def set_servo_angle_smooth(self, target_angle):
+        """Mueve el servo gradualmente en pasos para evitar picos de corriente (stall/brownout)."""
         if not self.pca_ready:
             return
             
-        # Limitar ángulo de seguridad para evitar tope mecánico de SG90
-        angle = max(-85, min(85, angle))
+        target_angle = max(-70, min(70, target_angle))
+        start_angle = getattr(self, 'current_servo_angle', 0)
         
-        # Para 50Hz (20ms periodo), 12-bits = 4096 pasos.
-        # Rango acotado para prevenir stall de corriente
-        duty_center = 307
-        duty_range = 175
+        if start_angle == target_angle:
+            self.set_servo_angle_direct(target_angle)
+            await asyncio.sleep_ms(100)
+            self.apagar_servo()
+            return
+
+        step = 5 if target_angle > start_angle else -5
+        curr = start_angle
         
-        duty = int(duty_center + (angle / 90.0) * duty_range)
-        try:
-            self.pca.duty(4, duty) # Usamos el Canal 4 para el servo
-        except Exception as e:
-            print("Error I2C en set_servo_angle:", e)
+        if step > 0:
+            while curr < target_angle:
+                curr = min(curr + step, target_angle)
+                self.set_servo_angle_direct(curr)
+                await asyncio.sleep_ms(15)
+        else:
+            while curr > target_angle:
+                curr = max(curr + step, target_angle)
+                self.set_servo_angle_direct(curr)
+                await asyncio.sleep_ms(15)
+                
+        await asyncio.sleep_ms(150)
+        self.apagar_servo()
 
     async def beep(self, freq=None, duration_ms=100):
         """Genera un pitido asíncrono y no bloqueante en el buzzer activo (GPIO 16).
@@ -201,7 +240,7 @@ class Rover:
     async def retroceder_distancia_segura(self):
         """Retrocede el rover aproximadamente 10cm de forma temporizada y segura."""
         print("Retrocediendo por seguridad...")
-        self.set_motores(-40, -40)
+        self.set_motores(40, -40) # Reversa segura considerando polaridad
         await asyncio.sleep_ms(600)  # ~10cm estimado por tiempo a 40%
         self.set_motores(0, 0, brake=True)
         await asyncio.sleep_ms(200)  # Estabilización
@@ -214,39 +253,35 @@ class Rover:
         """
         print(f"Iniciando secuencia de giro: {target_angle} grados")
         
-        # 1. Escaneo preventivo del sonar (Look-Before-Turn)
-        # Apuntar el servo: +85° si es giro a la izquierda, -85° si es a la derecha
-        servo_angle = 85 if target_angle > 0 else -85
-        self.set_servo_angle(servo_angle)
-        await asyncio.sleep_ms(300) # Esperar a que el servo se posicione
+        # 1. Escaneo preventivo suave del sonar (Look-Before-Turn)
+        servo_angle = 70 if target_angle > 0 else -70
+        await self.set_servo_angle_smooth(servo_angle)
         
         dist = self.medir_distancia()
         print(f"Distancia leída por pre-escaneo en {servo_angle}°: {dist} cm")
         
         if 0 < dist <= 15.0:
             print("Trayectoria de giro obstruida! Iniciando evasión...")
-            self.set_servo_angle(0) # Centrar servo
-            await asyncio.sleep_ms(200)
+            await self.set_servo_angle_smooth(0) # Centrar servo
             await self.beep(duration_ms=200)
             await self.retroceder_distancia_segura()
             print("Reintentando giro completo...")
             return await self.girar_grados(target_angle)
             
         # Trayectoria libre, centramos el servo para monitorear el frente durante el giro
-        self.set_servo_angle(0)
-        await asyncio.sleep_ms(200)
+        await self.set_servo_angle_smooth(0)
         
         # 2. Calibración rápida en estático
         offset_z = await self.tomar_offset_gyro_z()
         print(f"Offset Z de guiñada establecido en: {offset_z:.2f} deg/s")
         
-        # 3. Arrancar motores
-        # Giro a la izquierda: motor izquierdo atrás, motor derecho adelante
-        # Giro a la derecha: motor izquierdo adelante, motor derecho atrás
+        # 3. Arrancar motores según giro diferencial y polaridad física
+        # Giro a la izquierda: motor izquierdo atr/der ad -> (50, 50)
+        # Giro a la derecha: motor izquierdo ad/der atr -> (-50, -50)
         if target_angle > 0:
-            self.set_motores(-60, 60)
+            self.set_motores(50, 50)
         else:
-            self.set_motores(60, -60)
+            self.set_motores(-50, -50)
             
         angulo_acumulado = 0.0
         last_time = time.ticks_us()
