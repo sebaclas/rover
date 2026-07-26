@@ -34,21 +34,19 @@ Para optimizar el conexionado y el uso de pines GPIO, los periféricos principal
 1.  **Bus I2C Compartido**: La pantalla OLED SSD1306 y el controlador PWM PCA9685 comparten un único bus I2C (`GPIO 4` y `GPIO 5`) conectado a través de una bornera distribuidora. En el futuro, el acelerómetro/giróscopo (IMU) compartirá este mismo bus I2C, reservando el `GPIO 6` en caso de que requiera línea de interrupción.
 2.  **Interfaz Directa GPIO**: El sensor de distancia ultrasónico RCWL-9610A se conecta directamente a pines GPIO dedicados (`GPIO 9` para TRIG y `GPIO 10` para ECHO) para evitar problemas de bus y latencias.
 
-### 2.2 Interfaz de Audio I2S Dedicada
-Para dotar de voz al rover, se integra el módulo amplificador MAX98357A mediante una interfaz digital I2S dedicada, utilizando tres pines GPIO libres del ESP32-S3 (`GPIO 18` para DIN, `GPIO 17` para BCLK, y `GPIO 16` para LRC).
+### 2.2 Zumbador (Buzzer) Activo Dedicado
+Para proveer alertas sonoras y retroalimentación de estado (como el sonido de inicio o advertencias de proximidad por obstáculos), el rover utiliza un zumbador (buzzer) activo conectado a un pin GPIO dedicado del ESP32-S3 (`GPIO 16`). Esto simplifica el sistema de audio, reduciendo el consumo de RAM/Flash al eliminar el subsistema I2S y la reproducción de archivos WAV, liberando además los pines `GPIO 17` y `GPIO 18`.
 
-El conexionado general se realiza de la siguiente forma (usando tracción y giro diferencial con dos motores independientes y sin servo de dirección física):
+El conexionado general se realiza de la siguiente forma (usando tracción y giro diferencial con dos motores independientes mediante el driver de motores DRV8833 y sin servo de dirección física):
 
 ```mermaid
-graph TD
+flowchart TD
     subgraph ESP32-S3 ["ESP32-S3 (Unidad Principal)"]
         gpio4["GPIO 4 (SDA)"]
         gpio5["GPIO 5 (SCL)"]
         gpio9["GPIO 9 (TRIG)"]
         gpio10["GPIO 10 (ECHO)"]
-        gpio18["GPIO 18 (DIN I2S)"]
-        gpio17["GPIO 17 (BCLK I2S)"]
-        gpio16["GPIO 16 (LRC I2S)"]
+        gpio16["GPIO 16 (BUZZER)"]
         gpio6["GPIO 6 (INT IMU)"]
         vcc33["3.3V (VCC)"]
         vcc50["5V (VCC)"]
@@ -77,22 +75,32 @@ graph TD
     subgraph PCA ["PCA9685 (0x40)"]
         pca_sda["SDA"]
         pca_scl["SCL"]
-        pca_ch0["Canal 0 (Motor Izq)"]
-        pca_ch1["Canal 1 (Motor Der)"]
+        pca_ch0["Canal 0 (Motor Izq - IN1)"]
+        pca_ch1["Canal 1 (Motor Izq - IN2)"]
+        pca_ch2["Canal 2 (Motor Der - IN3)"]
+        pca_ch3["Canal 3 (Motor Der - IN4)"]
         pca_ch4["Canal 4 (Servo Sonar)"]
         pca_vcc["VCC"]
         pca_gnd["GND"]
     end
 
-    subgraph Audio ["MAX98357A (Amplificador I2S)"]
-        amp_din["DIN"]
-        amp_bclk["BCLK"]
-        amp_lrc["LRC"]
-        amp_vin["VIN"]
-        amp_gnd["GND"]
-        amp_gain["GAIN (3dB)"]
-        amp_outp["OUT+"]
-        amp_outn["OUT-"]
+    subgraph Buzzer ["Buzzer Activo"]
+        buzzer_sig["SIG"]
+        buzzer_vcc["VCC"]
+        buzzer_gnd["GND"]
+    end
+
+    subgraph DRV8833 ["Driver DRV8833 (Puente H)"]
+        drv_in1["IN1"]
+        drv_in2["IN2"]
+        drv_in3["IN3"]
+        drv_in4["IN4"]
+        drv_out1["OUT1"]
+        drv_out2["OUT2"]
+        drv_out3["OUT3"]
+        drv_out4["OUT4"]
+        drv_vcc["VCC (Batería)"]
+        drv_gnd["GND"]
     end
 
     subgraph IMU ["IMU (Futuro Acel/Giro)"]
@@ -106,8 +114,9 @@ graph TD
     sda_bus ~~~ sonar_gnd
     sonar_gnd ~~~ oled_gnd
     oled_gnd ~~~ pca_gnd
-    pca_gnd ~~~ amp_gnd
-    amp_gnd ~~~ imu_int
+    pca_gnd ~~~ buzzer_gnd
+    buzzer_gnd ~~~ drv_gnd
+    drv_gnd ~~~ imu_int
 
     %% I2C Connections
     gpio4 --> sda_bus
@@ -127,10 +136,14 @@ graph TD
     gpio9 --> sonar_trig
     gpio10 --> sonar_echo
 
-    %% I2S Audio Connections
-    gpio18 --> amp_din
-    gpio17 --> amp_bclk
-    gpio16 --> amp_lrc
+    %% Buzzer Connections
+    gpio16 --> buzzer_sig
+
+    %% PCA9685 to DRV8833 Connections
+    pca_ch0 --> drv_in1
+    pca_ch1 --> drv_in2
+    pca_ch2 --> drv_in3
+    pca_ch3 --> drv_in4
 
     %% Power Connections (Logic)
     vcc33 -.-> sonar_vcc
@@ -139,34 +152,37 @@ graph TD
     gnd -.-> oled_gnd
     vcc33 -.-> pca_vcc
     gnd -.-> pca_gnd
-    vcc50 -.-> amp_vin
-    gnd -.-> amp_gnd
-    vcc50 -.-> amp_gain
+    vcc33 -.-> buzzer_vcc
+    gnd -.-> buzzer_gnd
+    gnd -.-> drv_gnd
+    bateria["Batería LiPo 7.4V"] -.-> drv_vcc
 
     %% Actuator Connections
     pca_ch4 --> servo_sonar["Servo Sonar (SG90)"]
-    pca_ch0 --> motor_izq["ESC / Motor Izq (Tracción/Giro)"]
-    pca_ch1 --> motor_der["ESC / Motor Der (Tracción/Giro)"]
-    amp_outp --> altavoz["Altavoz 8Ω 0.25W"]
-    amp_outn --> altavoz
+    drv_out1 --> motor_izq["Motor DC Izq"]
+    drv_out2 --> motor_izq
+    drv_out3 --> motor_der["Motor DC Der"]
+    drv_out4 --> motor_der
 
     classDef esp32Fill fill:#2c3e50,stroke:#34495e,color:#ffffff,font-size:12px;
     classDef bornFill fill:#7f8c8d,stroke:#95a5a6,color:#ffffff,font-size:12px;
     classDef sonarFill fill:#16a085,stroke:#1abc9c,color:#ffffff,font-size:12px;
     classDef oledFill fill:#1e272e,stroke:#05c46b,color:#00d8d6,font-size:12px;
     classDef pcaFill fill:#3498db,stroke:#2980b9,color:#ffffff,font-size:12px;
-    classDef audioFill fill:#8e44ad,stroke:#9b59b6,color:#ffffff,font-size:12px;
+    classDef buzzerFill fill:#8e44ad,stroke:#9b59b6,color:#ffffff,font-size:12px;
+    classDef drvFill fill:#e74c3c,stroke:#c0392b,color:#ffffff,font-size:12px;
     classDef imuFill fill:#d35400,stroke:#e67e22,color:#ffffff,font-size:12px;
     classDef actFill fill:#27ae60,stroke:#2ecc71,color:#ffffff,font-size:12px;
 
-    class gpio4,gpio5,gpio9,gpio10,gpio16,gpio17,gpio18,gpio6,vcc33,gnd esp32Fill;
+    class gpio4,gpio5,gpio9,gpio10,gpio16,gpio6,vcc33,gnd esp32Fill;
     class sda_bus,scl_bus bornFill;
     class sonar_trig,sonar_echo,sonar_vcc,sonar_gnd sonarFill;
     class oled_sda,oled_scl,oled_vcc,oled_gnd oledFill;
-    class pca_sda,pca_scl,pca_ch0,pca_ch1,pca_ch4,pca_vcc,pca_gnd pcaFill;
-    class amp_din,amp_bclk,amp_lrc,amp_vin,amp_gnd,amp_gain,amp_outp,amp_outn audioFill;
+    class pca_sda,pca_scl,pca_ch0,pca_ch1,pca_ch2,pca_ch3,pca_ch4,pca_vcc,pca_gnd pcaFill;
+    class buzzer_sig,buzzer_vcc,buzzer_gnd buzzerFill;
+    class drv_in1,drv_in2,drv_in3,drv_in4,drv_out1,drv_out2,drv_out3,drv_out4,drv_vcc,drv_gnd drvFill;
     class imu_sda,imu_scl,imu_int imuFill;
-    class servo_sonar,motor_izq,motor_der,altavoz actFill;
+    class servo_sonar,motor_izq,motor_der actFill;
 ```
 
 > 💡 **Diagrama interactivo**: El diagrama de conexión detallado está disponible en el archivo de Draw.io: [rover_conexion.drawio](file:///c:/Users/sclasen/Documents/Archivos%20personales/Antigravity/ESP/docs/assets/rover_conexion.drawio)
@@ -210,7 +226,7 @@ graph TD
   **Tensión de lógica**        3.3 V / 5 V compatible
   **Tensión de servos (V+)**   Alimentación externa recomendada
   **Dirección I2C base**       0x40 (configurable via pines A0--A5)
-  **Uso en el proyecto**       Control de motores de tracción trasero (giro diferencial) y servo de sonar
+  **Uso en el proyecto**       Control del driver de motores DRV8833 (Canales 0-3) y servo de sonar (Canal 4)
   **Librería MicroPython**     Por definir
   ---------------------------- -------------------------------------------------
 
@@ -219,7 +235,7 @@ graph TD
 
 **3.3 Sensor de Distancia**
 
-**RCWL-9610A --- Sensor Ultrasónico (Modo GPIO)**
+**RCWL-9610A --- Sensor Ultrasónico (Modo GPIO Tradicional)**
 
   -------------------------- -----------------------------------------------------------------------------
   **Parámetro**              Valor
@@ -231,11 +247,11 @@ graph TD
   **Tensión de operación**   3.3 V o 5 V (se alimenta a 3.3V para niveles lógicos seguros)
   **Corriente**              ~15 mA
   **Interfaz con MCU**       GPIO Trig/Echo (TRIG: GPIO 9, ECHO: GPIO 10)
-  **Dirección I2C base**     N/A (Se utiliza en modo GPIO, sin soldar jumper I2C)
+  **Dirección I2C base**     N/A (Se utiliza en modo GPIO tradicional, sin soldar jumper I2C)
   **Montaje**                Sobre servo rotativo (ver sección 3.4)
   -------------------------- -----------------------------------------------------------------------------
 
-> *📝 Decisión: Se conecta por GPIO utilizando pines dedicados para garantizar la estabilidad de las lecturas y la inmunidad a fallos del bus I2C bajo carga.*
+> *📝 Decisión: Finalmente no se pudo hacer funcionar el sensor sonar mediante comunicación I2C de manera estable, por lo que se mantuvo el método tradicional por GPIO (TRIG en GPIO 9 y ECHO en GPIO 10) utilizando pines dedicados. Esto garantiza lecturas fiables y estables sin riesgo de bloqueos en el bus I2C.*
 
 **3.4 Servo de Orientación del Sonar**
 
@@ -291,22 +307,38 @@ graph TD
 
 > *📝 Decisión: La pantalla OLED SSD1306 se integra al mismo bus I2C del ESP32-S3 para mostrar información local del rover sin añadir cables GPIO adicionales.*
 
-**3.7 Módulo de Audio I2S y Altavoz**
+**3.7 Zumbador (Buzzer) Activo**
 
-**MAX98357A --- Módulo Amplificador de Audio Clase D I2S**
+**Buzzer Activo --- Pitidos y Alertas de Estado**
 
   ---------------------------- -------------------------------------------------
   **Parámetro**                Valor
-  **Modelo**                   MAX98357A
-  **Interfaz con MCU**         I2S (DIN, BCLK, LRC)
-  **Altavoz recomendado**      Altavoz 8Ω 0.25W
-  **Configuración de Ganancia** 3 dB (Patilla GAIN conectada directamente a VIN / 5V)
-  **Tensión de alimentación**  5.0 V (Recomendado) / 3.3 V (VIN)
-  **Canal de audio**           Mono (mezcla interna por defecto)
-  **Uso en el proyecto**       Salida de voz, tonos y alertas locales del rover
+  **Modelo**                   Buzzer Activo (zumbador)
+  **Interfaz con MCU**         GPIO Directo (ON/OFF)
+  **Tensión de alimentación**  3.3 V (directamente desde pin de control)
+  **Pin de control**           GPIO 16
+  **Uso en el proyecto**       Pitido corto al completar inicialización y tonos intermitentes de advertencia por proximidad de obstáculos
   ---------------------------- -------------------------------------------------
 
-> *📝 Decisión: El uso de I2S permite una salida de audio digital limpia sin necesidad de DACs analógicos externos complejos, y el amplificador MAX98357A Clase D de alta eficiencia provee suficiente potencia para el altavoz de 8Ω de forma directa.*
+> *📝 Decisión: El rover no cuenta con reproducción de voz ni salida I2S. En su lugar, se utiliza un buzzer activo en el pin GPIO 16, lo que simplifica enormemente el firmware y el hardware, liberando además los pines GPIO 17 y GPIO 18.*
+
+**3.8 Driver de Motores DC**
+
+**DRV8833 --- Puente H de 2 Canales**
+
+  ---------------------------- -------------------------------------------------
+  **Parámetro**                Valor
+  **Modelo**                   DRV8833 (Puente H Doble)
+  **Canales**                  2 canales independientes (para 2 motores DC)
+  **Corriente de salida**      1.5 A por canal (pico 2 A)
+  **Tensión de alimentación**  2.7 V -- 10.8 V (alimentado desde batería LiPo 7.4V)
+  **Señales de control**       4 entradas PWM desde PCA9685 (IN1/IN2 para motor izquierdo, IN3/IN4 para motor derecho)
+  **Frecuencia PWM**           50 Hz (configurada en el PCA9685)
+  **Lógica de control**        Giro adelante (IN1=PWM, IN2=0), giro atrás (IN1=0, IN2=PWM), freno activo (IN1=IN2=HIGH/4095)
+  **Uso en el proyecto**       Tracción trasera del rover con giro diferencial (sin servo de dirección física)
+  ---------------------------- -------------------------------------------------
+
+> *📝 Decisión: El uso del puente H DRV8833 permite el control bidireccional y de velocidad (PWM) de los dos motores DC utilizando canales dedicados del PCA9685. Esto evita consumir pines de alta corriente o PWM directos del ESP32-S3.*
 
 **4. Decisiones de Diseño**
 
@@ -316,9 +348,10 @@ graph TD
   **PCA9685 vía I2C**           Libera pines del MCU, permite múltiples servos/motores con un bus
   **Sonar sobre servo**         Permite barrido angular de obstáculos sin multiplexar varios sensores
   **ESP32-CAM separado**        Delega el procesamiento de imagen a una unidad dedicada, no satura el MCU principal
-  **I2C Parcial**               Uso de bus I2C solo para PCA9685 y OLED, separando el sonar por GPIO para prevenir bloqueos de bus
-  **Audio I2S Dedicado**        Uso de I2S (GPIO 16, 17, 18) para una salida digital limpia y directa al amplificador MAX98357A
+  **Sonar por GPIO (Trig/Echo)** Sonar en GPIO 9 (TRIG) y GPIO 10 (ECHO) usando el método tradicional tras comprobar inestabilidad técnica por bus I2C
+  **Buzzer Activo (GPIO 16)**   Uso de zumbador activo simple en GPIO 16 en lugar de I2S (MAX98357A) para simplificar software/hardware y liberar pines GPIO 17 y 18
   **IMU en I2C Compartido**     Conectar el acelerómetro/giróscopo al bus I2C común (GPIO 4/5) y reservar GPIO 6 para interrupción
+  **Puente H DRV8833**          Control de motores traseros DC usando 2 canales PWM del PCA9685 por motor para velocidad, sentido y freno activo
   ----------------------------- -------------------------------------------------------------------------------------
 
 **5. Pendientes y Próximos Pasos**
@@ -341,11 +374,11 @@ graph TD
   **GPIO 4**     SDA (I2C Datos)        Bus I2C Compartido (PCA9685, SSD1306, IMU)    Bidireccional
   **GPIO 5**     SCL (I2C Reloj)        Bus I2C Compartido (PCA9685, SSD1306, IMU)    Salida (OUT)
   **GPIO 6**     INT (Interrupción)     Reservado para acelerómetro/giróscopo (IMU)   Entrada (IN)
-  **GPIO 9**     TRIG Sonar             Sensor Ultrasónico RCWL-9610A                 Salida (OUT)
-  **GPIO 10**    ECHO Sonar             Sensor Ultrasónico RCWL-9610A                 Entrada (IN)
-  **GPIO 16**    LRC I2S (Word Select)  Módulo Amplificador de Audio MAX98357A        Salida (OUT)
-  **GPIO 17**    BCLK I2S (Bit Clock)   Módulo Amplificador de Audio MAX98357A        Salida (OUT)
-  **GPIO 18**    DIN I2S (Data Input)   Módulo Amplificador de Audio MAX98357A        Salida (OUT)
+  **GPIO 9**     TRIG Sonar             Sensor Ultrasónico RCWL-9610A (Método Trad.)  Salida (OUT)
+  **GPIO 10**    ECHO Sonar             Sensor Ultrasónico RCWL-9610A (Método Trad.)  Entrada (IN)
+  **GPIO 16**    Buzzer (Alarma)        Zumbador (Buzzer) Activo                      Salida (OUT)
+  **GPIO 17**    Libre                  N/A                                           -
+  **GPIO 18**    Libre                  N/A                                           -
   **GPIO 48**    LED RGB NeoPixel       NeoPixel integrado en placa (1 LED)           Salida (OUT)
   -------------- ---------------------- --------------------------------------------- ---------------
 
@@ -358,4 +391,5 @@ graph TD
   **0.3 --- Jul 2026**   Retorno de sensor de distancia (RCWL-9610A) a pines GPIO 9 (TRIG) y 10 (ECHO) por estabilidad del bus I2C.
   **0.4 --- Jul 2026**   Eliminación de servo de dirección física. Configuración de giro diferencial usando motores traseros independientes.
   **0.5 --- Jul 2026**   Adición de especificación de audio con módulo amplificador I2S MAX98357A y altavoz de 8Ω, asignando los pines GPIO 16, 17 y 18. Previsión de bus I2C compartido para IMU y reserva de GPIO 6 como interrupción.
+  **0.6 --- Jul 2026**   Simplificación de audio: reemplazo de I2S MAX98357A por un buzzer activo en GPIO 16, liberando GPIO 17 y 18. Confirmación definitiva de sonar por método GPIO tradicional por imposibilidad de hacerlo andar estable en I2C. Adición de especificación del driver de motor DC DRV8833 controlado con 2 canales del PCA9685 por motor.
   ---------------------- -----------------------------------------------------------------------------------------------------

@@ -24,7 +24,7 @@ async def telemetry(request, ws):
             if 'command' in data:
                 cmd = data['command']
                 print(f"Comando recibido: {cmd}")
-                handle_command(cmd)
+                await handle_command(cmd)
             if 'servo' in data:
                 angle = data['servo']
                 print(f"Moviendo servo a: {angle}")
@@ -37,7 +37,7 @@ async def telemetry(request, ws):
             print(f"WS Error: {e}")
             sys.print_exception(e)
             # No hacemos 'break' aquí para evitar que se caiga la conexión al dashboard por un mal input
-
+        
         # Enviar telemetria (distancia del sonar y datos del MPU-6050)
         if rover_instance:
             dist = rover_instance.medir_distancia()
@@ -56,9 +56,15 @@ async def telemetry(request, ws):
             
         await asyncio.sleep(0.2) # Frecuencia de actualizacion
 
-def handle_command(cmd):
+async def handle_command(cmd):
     if not rover_instance:
         return
+        
+    # Cancelar cualquier tarea de giro en segundo plano si se recibe un nuevo comando
+    if rover_instance.active_turn_task and not rover_instance.active_turn_task.done():
+        print("Cancelando giro anterior por comando de interrupcion")
+        rover_instance.active_turn_task.cancel()
+        rover_instance.active_turn_task = None
         
     if cmd == 'UP':
         rover_instance.set_motores(80, 80)
@@ -73,6 +79,10 @@ def handle_command(cmd):
     elif cmd == 'STOP':
         rover_instance.set_motores(0, 0)
         rover_instance.set_led(0, 0, 255) # Azul detenido
+    elif cmd == 'TURN_LEFT_90':
+        rover_instance.active_turn_task = asyncio.create_task(rover_instance.girar_grados(90))
+    elif cmd == 'TURN_RIGHT_90':
+        rover_instance.active_turn_task = asyncio.create_task(rover_instance.girar_grados(-90))
 
 import ota
 

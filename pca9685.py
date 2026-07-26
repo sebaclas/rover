@@ -34,11 +34,16 @@ class PCA9685:
 
     def pwm(self, index, on=None, off=None):
         """Ajusta o lee los registros brutos ON y OFF de 12 bits"""
-        if on is None or off is None:
-            data = self.i2c.readfrom_mem(self.address, 0x06 + 4 * index, 4)
-            return ustruct.unpack('<HH', data)
-        data = ustruct.pack('<HH', on, off)
-        self.i2c.writeto_mem(self.address, 0x06 + 4 * index, data)
+        try:
+            if on is None or off is None:
+                data = self.i2c.readfrom_mem(self.address, 0x06 + 4 * index, 4)
+                return ustruct.unpack('<HH', data)
+            data = ustruct.pack('<HH', on, off)
+            self.i2c.writeto_mem(self.address, 0x06 + 4 * index, data)
+        except Exception as e:
+            print(f"Error I2C PCA9685 (canal {index}): {e}")
+            if on is None or off is None:
+                return (0, 0)
 
     def duty(self, index, value=None):
         """Ajusta o lee el ciclo de trabajo de 0 a 4095"""

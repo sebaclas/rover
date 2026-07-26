@@ -350,10 +350,10 @@
             <p style="font-size: 0.8rem; opacity: 0.6; margin-bottom: 5px;">Distancia (cm)</p>
             
             <div class="servo-input-group">
-                <input type="number" id="servo-angle" class="input-dark" value="0" min="-90" max="90">
+                <input type="number" id="servo-angle" class="input-dark" value="0" min="-85" max="85">
                 <button class="btn-small" onclick="sendServo()">Girar</button>
             </div>
-            <p style="font-size: 0.7rem; opacity: 0.4; margin-top: 5px;">-90° a +90°</p>
+            <p style="font-size: 0.7rem; opacity: 0.4; margin-top: 5px;">-85° a +85°</p>
         </div>
 
         <!-- Control de Movimiento -->
@@ -369,6 +369,10 @@
                 <div></div>
                 <button class="btn" onmousedown="sendCommand('DOWN')" onmouseup="sendCommand('STOP')">▼</button>
                 <div></div>
+            </div>
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <button class="btn-small" onclick="sendCommand('TURN_LEFT_90')">↶ Giro 90°</button>
+                <button class="btn-small" onclick="sendCommand('TURN_RIGHT_90')">Giro 90° ↷</button>
             </div>
             <div class="status">
                 <div id="status-dot" class="dot"></div>
@@ -501,11 +505,49 @@
         }
 
         function sendServo() {
-            const angle = document.getElementById('servo-angle').value;
+            const input = document.getElementById('servo-angle');
+            let angle = parseInt(input.value);
+            if (isNaN(angle)) angle = 0;
+            angle = Math.max(-85, Math.min(85, angle));
+            input.value = angle;
             if(ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({servo: parseInt(angle)}));
+                ws.send(JSON.stringify({servo: angle}));
             }
         }
+
+        let activeKey = null;
+
+        document.addEventListener('keydown', (event) => {
+            if (event.repeat) return;
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+
+            let cmd = null;
+            if (event.code === 'ArrowUp' || event.code === 'KeyW') {
+                cmd = 'UP';
+            } else if (event.code === 'ArrowDown' || event.code === 'KeyS') {
+                cmd = 'DOWN';
+            } else if (event.code === 'ArrowLeft' || event.code === 'KeyA') {
+                cmd = 'LEFT';
+            } else if (event.code === 'ArrowRight' || event.code === 'KeyD') {
+                cmd = 'RIGHT';
+            }
+
+            if (cmd) {
+                if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
+                    event.preventDefault();
+                }
+                activeKey = event.code;
+                sendCommand(cmd);
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            const movementKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyS', 'KeyA', 'KeyD'];
+            if (movementKeys.includes(event.code)) {
+                activeKey = null;
+                sendCommand('STOP');
+            }
+        });
 
         function checkUpdate() {
             if(confirm('¿Deseas buscar y aplicar actualizaciones vía OTA? El Rover se reiniciará.')) {
