@@ -418,7 +418,10 @@
         <!-- Sistema / OTA -->
         <div class="card">
             <h2>Estado del Sistema</h2>
-            <p id="version-label" style="font-size: 1.2rem; font-weight: bold;">v0.1.0</p>
+            <p id="version-label" style="font-size: 1.2rem; font-weight: bold; margin-bottom: 5px;">v0.1.0</p>
+            <div style="margin-bottom: 15px; text-align: center; font-size: 0.85rem;">
+                <span style="opacity: 0.6;">RAM Libre:</span> <strong id="ram-free" style="color: #10b981;">-- KB</strong>
+            </div>
             <button class="btn-update" onclick="checkUpdate()">Buscar Actualización</button>
         </div>
     </div>
@@ -446,6 +449,12 @@
 
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
+
+                // Telemetría RAM Libre ESP32
+                if(data.ram_free !== undefined) {
+                    const freeKb = (data.ram_free / 1024).toFixed(1);
+                    document.getElementById('ram-free').innerText = `${freeKb} KB`;
+                }
                 
                 // Distancia Sonar
                 if(data.distancia !== undefined) {

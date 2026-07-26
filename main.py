@@ -3,6 +3,8 @@ import wifi_manager
 from rover import Rover
 import web_monitor
 import machine
+import network
+import gc
 
 async def main():
     print("--- Rover Explorer Starting ---")
@@ -10,7 +12,6 @@ async def main():
     # 1. Inicializar Hardware
     rover = Rover()
     rover.set_led(255, 0, 0) # Rojo: Iniciando
-    
 
     if rover.oled_ready:
         rover.oled.fill(0)
@@ -34,7 +35,6 @@ async def main():
         machine.reset()
     
     # Obtener dirección IP de la placa
-    import network
     ip = network.WLAN(network.STA_IF).ifconfig()[0]
     
     rover.set_led(0, 255, 0) # Verde: Conectado
@@ -47,13 +47,13 @@ async def main():
         rover.oled.text("Puerto: 80", 0, 48)
         rover.oled.show()
         
-    print(f"Sistema listo! IP: {ip}")
+    gc.collect()
+    print(f"Sistema listo! IP: {ip} | RAM Libre: {gc.mem_free()} bytes")
 
     # Pitido de confirmación (inicialización completada con éxito)
     asyncio.create_task(rover.beep(2000, 150))
 
-    # 3. Lanzar Servidor Web (esto bloquea segun implementacion de Microdot app.run)
-    # Sin embargo, Microdot.start_server es asincrona
+    # 3. Lanzar Servidor Web
     await web_monitor.start_server(rover)
 
 if __name__ == '__main__':

@@ -5,6 +5,8 @@ import pca9685
 import ssd1306
 import uasyncio as asyncio
 import array
+import gc
+import mpu6050
 
 class Rover:
     def __init__(self):
@@ -49,7 +51,6 @@ class Rover:
         self.mpu = None
         if hasattr(self, 'i2c'):
             try:
-                import mpu6050
                 self.mpu = mpu6050.MPU6050(self.i2c, addr=0x68)
                 self.mpu_ready = True
                 print("MPU-6050 inicializado en I2C (0x68).")
@@ -63,6 +64,10 @@ class Rover:
         self.trig = machine.Pin(9, machine.Pin.OUT)
         self.echo = machine.Pin(10, machine.Pin.IN)
         self.trig.off()
+
+        # Recolectar basura acumulada durante la inicialización de drivers
+        gc.collect()
+        print(f"Rover inicializado. RAM libre: {gc.mem_free()} bytes")
 
     def set_led(self, r, g, b):
         """Controla el NeoPixel integrado (RGB)."""
