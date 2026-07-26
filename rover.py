@@ -13,10 +13,22 @@ class Rover:
         # Configuracion de pines segun especificaciones
         self.pixel = neopixel.NeoPixel(machine.Pin(48), 1)
         
-        # Estado del módulo de audio (Buzzer)
+        # Estado del módulo de audio (Buzzer) y tareas
         self.buzzer_busy = False
         self.last_warning_beep = 0
         self.active_turn_task = None
+        self.active_sequence_task = None
+        
+        # Parámetros de velocidad y estado de secuencias
+        self.speed_m_s = 0.35
+        self.global_speed_pct = 80
+        self.sequence_status = {
+            "running": False,
+            "step": 0,
+            "total": 0,
+            "action": "",
+            "message": "Inactivo"
+        }
         
         # Inicialización del bus I2C, PCA9685 y SSD1306
         self.pca_ready = False
@@ -276,11 +288,14 @@ class Rover:
         print(f"Distancia mínima leída en pre-escaneo de 3s en {servo_angle}°: {dist} cm")
         
         if 0 < dist <= 15.0:
-            print("Trayectoria de giro obstruida! Iniciando evasión...")
+            print("Trayectoria de giro obstruida! Avanzando 30cm para despejar...")
             await self.set_servo_angle_smooth(0) # Centrar servo
             await self.beep(duration_ms=200)
-            await self.retroceder_distancia_segura()
-            print("Reintentando giro completo...")
+            clear = await self.avanzar_distancia_suave(0.30, target_speed=50)
+            if not clear:
+                print("Obstáculo frontal detectado al avanzar. Abortando giro.")
+                return False
+            print("Re-evaluando trayectoria de giro...")
             return await self.girar_grados(target_angle)
             
         # Trayectoria libre, centramos el servo para monitorear el frente durante el giro
@@ -332,3 +347,190 @@ class Rover:
             
         print(f"Giro completado con éxito. Ángulo final integrado: {angulo_acumulado:.2f}°")
         await self.beep(duration_ms=100)
+        return True
+
+    async def avanzar_distancia_suave(self, distancia_m, target_speed=None):
+        """Avanza la distancia indicada en metros utilizando una rampa de desaceleración suave al detectar obstáculos (50cm a 10cm)."""
+        if target_speed is None:
+            target_speed = self.global_speed_pct
+        target_speed = max(30, min(100, target_speed))
+        
+        duracion_ms = int(((distancia_m / self.speed_m_s) * (80.0 / target_speed)) * 1000)
+        print(f"Avanzando {distancia_m}m a {target_speed}% Vel (Tiempo est: {duracion_ms}ms)")
+        
+        start_time = time.ticks_ms()
+        try:
+            while time.ticks_diff(time.ticks_ms(), start_time) < duracion_ms:
+                dist = self.medir_distancia()
+                
+                if 0 < dist <= 10.0:
+                    print(f"¡Obstáculo crítico detectado a {dist}cm! Deteniendo avance.")
+                    self.set_motores(0, 0, brake=True)
+                    await self.beep(duration_ms=300)
+                    return False # Abortado por obstáculo
+                    
+                if 10.0 < dist <= 50.0:
+                    # Rampa de desaceleración proporcional entre 50cm y 10cm
+                    factor = (dist - 10.0) / 40.0
+                    current_speed = int(30 + (target_speed - 30) * factor)
+                else:
+                    current_speed = target_speed
+                    
+                self.set_motores(-current_speed, current_speed)
+                await asyncio.sleep_ms(20)
+        finally:
+            self.set_motores(0, 0, brake=True)
+            
+        return True
+
+    async def retroceder_distancia(self, distancia_m, target_speed=None):
+        """Retrocede la distancia indicada en metros a la velocidad configurada."""
+        if target_speed is None:
+            target_speed = self.global_speed_pct
+        target_speed = max(30, min(100, target_speed))
+        
+        duracion_ms = int(((distancia_m / self.speed_m_s) * (80.0 / target_speed)) * 1000)
+        print(f"Retrocediendo {distancia_m}m a {target_speed}% Vel (Tiempo est: {duracion_ms}ms)")
+        
+        self.set_motores(target_speed, -target_speed)
+        await asyncio.sleep_ms(duracion_ms)
+        self.set_motores(0, 0, brake=True)
+        return True
+
+    async def ejecutar_calibracion_5s(self, power_pct=80):
+        """Avanza durante 5.0s continuos a power_pct para permitir la medición empírica de velocidad."""
+        print(f"Iniciando prueba de calibración de velocidad (5s a {power_pct}%)...")
+        start_time = time.ticks_ms()
+        try:
+            while time.ticks_diff(time.ticks_ms(), start_time) < 5000:
+                dist = self.medir_distancia()
+                if 0 < dist <= 10.0:
+                    print(f"Obstáculo detectado a {dist}cm durante prueba de calibración.")
+                    self.set_motores(0, 0, brake=True)
+                    await self.beep(duration_ms=300)
+                    return False
+                self.set_motores(-power_pct, power_pct)
+                await asyncio.sleep_ms(20)
+        finally:
+            self.set_motores(0, 0, brake=True)
+        await self.beep(duration_ms=200)
+        return True
+
+    async def ejecutar_secuencia(self, steps, calibration_speed=None, global_speed=None):
+        """Ejecuta una secuencia programada de hasta N pasos asíncronos."""
+        if calibration_speed and calibration_speed > 0:
+            self.speed_m_s = calibration_speed
+        if global_speed and global_speed > 0:
+            self.global_speed_pct = global_speed
+            
+        total_steps = len(steps)
+        self.sequence_status = {
+            "running": True,
+            "step": 0,
+            "total": total_steps,
+            "action": "START",
+            "message": f"Iniciando secuencia ({total_steps} pasos)..."
+        }
+        print(f"Ejecutando secuencia: {steps}")
+        
+        try:
+            for i, step in enumerate(steps):
+                step_num = i + 1
+                action = step.get('action', '')
+                val = float(step.get('val', 0))
+                speed = step.get('speed', None)
+                if speed is None or speed == "" or speed == "auto":
+                    speed = self.global_speed_pct
+                else:
+                    speed = int(speed)
+                    
+                self.sequence_status = {
+                    "running": True,
+                    "step": step_num,
+                    "total": total_steps,
+                    "action": action,
+                    "message": f"Paso {step_num}/{total_steps}: {action} ({val}) [{speed}% Vel]"
+                }
+                print(f"Paso {step_num}/{total_steps}: {action} {val} (Vel: {speed}%)")
+                
+                success = True
+                if action == 'FORWARD':
+                    success = await self.avanzar_distancia_suave(val, target_speed=speed)
+                elif action == 'BACKWARD':
+                    success = await self.retroceder_distancia(val, target_speed=speed)
+                elif action == 'TURN_LEFT':
+                    success = await self.girar_grados(90)
+                elif action == 'TURN_RIGHT':
+                    success = await self.girar_grados(-90)
+                elif action == 'PAUSE':
+                    await asyncio.sleep(val)
+                else:
+                    print(f"Acción no reconocida en paso {step_num}: {action}")
+                    
+                if success is False:
+                    print(f"Paso {step_num} abortado por obstáculo o falla.")
+                    self.sequence_status = {
+                        "running": False,
+                        "step": step_num,
+                        "total": total_steps,
+                        "action": action,
+                        "message": f"⚠️ ABORTADO en paso {step_num} ({action})"
+                    }
+                    return False
+                    
+                await asyncio.sleep_ms(200) # Pausa mecánica entre pasos
+                
+            self.sequence_status = {
+                "running": False,
+                "step": total_steps,
+                "total": total_steps,
+                "action": "DONE",
+                "message": "🏁 Secuencia completada con éxito!"
+            }
+            await self.beep(duration_ms=100)
+            await asyncio.sleep_ms(100)
+            await self.beep(duration_ms=100)
+            return True
+        except asyncio.CancelledError:
+            print("Secuencia cancelada por el usuario.")
+            self.set_motores(0, 0, brake=True)
+            self.sequence_status = {
+                "running": False,
+                "step": 0,
+                "total": total_steps,
+                "action": "CANCELLED",
+                "message": "⏹ Secuencia cancelada por el usuario"
+            }
+            return False
+        except Exception as e:
+            print(f"Error ejecutando secuencia: {e}")
+            self.set_motores(0, 0, brake=True)
+            self.sequence_status = {
+                "running": False,
+                "step": 0,
+                "total": total_steps,
+                "action": "ERROR",
+                "message": f"Error: {e}"
+            }
+            return False
+        finally:
+            self.set_motores(0, 0, brake=True)
+
+    async def abortar_secuencia(self):
+        """Detiene cualquier secuencia o giro en ejecución inmediatamente."""
+        if self.active_sequence_task and not self.active_sequence_task.done():
+            print("Cancelando tarea de secuencia activa...")
+            self.active_sequence_task.cancel()
+            self.active_sequence_task = None
+        if self.active_turn_task and not self.active_turn_task.done():
+            self.active_turn_task.cancel()
+            self.active_turn_task = None
+        self.set_motores(0, 0, brake=True)
+        self.sequence_status = {
+            "running": False,
+            "step": 0,
+            "total": 0,
+            "action": "ABORTED",
+            "message": "⏹ Secuencia abortada"
+        }
+        await self.beep(duration_ms=200)

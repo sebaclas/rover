@@ -415,6 +415,48 @@
             </div>
         </div>
 
+        <!-- Programador de Rutina y Calibración -->
+        <div class="card" style="grid-column: span 2;">
+            <h2>Programador de Rutina</h2>
+            
+            <div style="display: flex; gap: 15px; width: 100%; margin-bottom: 15px; flex-wrap: wrap; justify-content: space-between; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 12px;">
+                <div style="flex: 1; min-width: 180px;">
+                    <label style="font-size: 0.75rem; opacity: 0.7; display: block; margin-bottom: 4px;">Velocidad Global (% PWM)</label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="range" id="global-speed-slider" min="30" max="100" value="80" onchange="sendGlobalSpeed()" style="flex: 1;">
+                        <span id="global-speed-val" style="font-weight: bold; font-size: 0.9rem; min-width: 35px;">80%</span>
+                    </div>
+                </div>
+                <div style="flex: 1; min-width: 180px;">
+                    <label style="font-size: 0.75rem; opacity: 0.7; display: block; margin-bottom: 4px;">Velocidad Calibrada (m/s)</label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="number" id="cal-speed-input" class="input-dark" value="0.35" step="0.01" min="0.05" max="2.0" style="width: 80px;" onchange="sendCalibration()">
+                        <button class="btn-small" onclick="runCalibrationTest()" title="Avanza 5s a potencia nominal para medir la distancia recorrida">🧪 Probar 5s</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pasos de Secuencia -->
+            <div id="sequence-steps-container" style="width: 100%; display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
+                <!-- Filas de pasos insertadas dinámicamente -->
+            </div>
+
+            <div style="display: flex; gap: 10px; width: 100%; margin-bottom: 15px;">
+                <button class="btn-small" onclick="addStepRow()" id="add-step-btn" style="background: rgba(255,255,255,0.1); border: 1px dashed var(--primary);">+ Agregar Paso</button>
+                <button class="btn-small" onclick="clearStepRows()" style="background: rgba(255,255,255,0.05);">Limpiar</button>
+            </div>
+
+            <div style="display: flex; gap: 10px; width: 100%; align-items: center;">
+                <button class="btn-small" onclick="executeSequence()" style="flex: 2; padding: 12px; background: linear-gradient(90deg, var(--primary), var(--secondary)); font-weight: bold; font-size: 1rem; color: #0f172a;">▶ Ejecutar Secuencia</button>
+                <button class="btn-small" onclick="abortSequence()" style="flex: 1; padding: 12px; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; font-weight: bold;">⏹ Abortar</button>
+            </div>
+
+            <!-- Estado de la Ejecución -->
+            <div id="seq-status-box" style="margin-top: 12px; width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 10px; text-align: center; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.05);">
+                <span id="seq-status-text" style="opacity: 0.8;">Estado: En espera de comandos...</span>
+            </div>
+        </div>
+
         <!-- Sistema / OTA -->
         <div class="card">
             <h2>Estado del Sistema</h2>
@@ -432,6 +474,150 @@
         const gaugeFill = document.getElementById('gauge-fill');
         const statusDot = document.getElementById('status-dot');
         const statusText = document.getElementById('status-text');
+
+        let sequenceSteps = [
+            { action: 'FORWARD', val: 2.0, speed: 'auto' },
+            { action: 'TURN_RIGHT', val: 90, speed: 'auto' },
+            { action: 'FORWARD', val: 0.5, speed: 'auto' },
+            { action: 'TURN_RIGHT', val: 90, speed: 'auto' }
+        ];
+
+        function renderStepRows() {
+            const container = document.getElementById('sequence-steps-container');
+            if(!container) return;
+            container.innerHTML = '';
+            
+            sequenceSteps.forEach((step, idx) => {
+                const row = document.createElement('div');
+                row.style.cssText = 'display: flex; gap: 8px; width: 100%; align-items: center; background: rgba(255,255,255,0.03); padding: 6px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);';
+                
+                const label = document.createElement('span');
+                label.style.cssText = 'font-weight: bold; font-size: 0.8rem; min-width: 45px; opacity: 0.7;';
+                label.innerText = `Paso ${idx + 1}`;
+
+                const selectAction = document.createElement('select');
+                selectAction.className = 'input-dark';
+                selectAction.style.cssText = 'flex: 2; padding: 6px; font-size: 0.85rem;';
+                selectAction.innerHTML = `
+                    <option value="FORWARD" ${step.action === 'FORWARD' ? 'selected' : ''}>Avanzar (m)</option>
+                    <option value="BACKWARD" ${step.action === 'BACKWARD' ? 'selected' : ''}>Retroceder (m)</option>
+                    <option value="TURN_LEFT" ${step.action === 'TURN_LEFT' ? 'selected' : ''}>Girar Izq 90°</option>
+                    <option value="TURN_RIGHT" ${step.action === 'TURN_RIGHT' ? 'selected' : ''}>Girar Der 90°</option>
+                    <option value="PAUSE" ${step.action === 'PAUSE' ? 'selected' : ''}>Pausa (s)</option>
+                `;
+                selectAction.onchange = (e) => {
+                    sequenceSteps[idx].action = e.target.value;
+                    if(e.target.value === 'TURN_LEFT' || e.target.value === 'TURN_RIGHT') {
+                        sequenceSteps[idx].val = 90;
+                    }
+                    renderStepRows();
+                };
+
+                const inputVal = document.createElement('input');
+                inputVal.type = 'number';
+                inputVal.className = 'input-dark';
+                inputVal.style.cssText = 'flex: 1.2; padding: 6px; font-size: 0.85rem; min-width: 60px;';
+                inputVal.value = step.val;
+                inputVal.step = (step.action === 'PAUSE' || step.action === 'FORWARD' || step.action === 'BACKWARD') ? '0.1' : '1';
+                inputVal.disabled = (step.action === 'TURN_LEFT' || step.action === 'TURN_RIGHT');
+                inputVal.onchange = (e) => {
+                    sequenceSteps[idx].val = parseFloat(e.target.value) || 0;
+                };
+
+                const selectSpeed = document.createElement('select');
+                selectSpeed.className = 'input-dark';
+                selectSpeed.style.cssText = 'flex: 1.5; padding: 6px; font-size: 0.85rem;';
+                selectSpeed.innerHTML = `
+                    <option value="auto" ${step.speed === 'auto' ? 'selected' : ''}>Vel: Auto</option>
+                    <option value="30" ${step.speed == 30 ? 'selected' : ''}>30% PWM</option>
+                    <option value="50" ${step.speed == 50 ? 'selected' : ''}>50% PWM</option>
+                    <option value="80" ${step.speed == 80 ? 'selected' : ''}>80% PWM</option>
+                    <option value="100" ${step.speed == 100 ? 'selected' : ''}>100% PWM</option>
+                `;
+                selectSpeed.onchange = (e) => {
+                    sequenceSteps[idx].speed = e.target.value;
+                };
+
+                const btnRemove = document.createElement('button');
+                btnRemove.style.cssText = 'background: rgba(239, 68, 68, 0.2); border: none; color: #ef4444; border-radius: 8px; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold;';
+                btnRemove.innerText = '✕';
+                btnRemove.onclick = () => {
+                    sequenceSteps.splice(idx, 1);
+                    renderStepRows();
+                };
+
+                row.appendChild(label);
+                row.appendChild(selectAction);
+                row.appendChild(inputVal);
+                row.appendChild(selectSpeed);
+                row.appendChild(btnRemove);
+                container.appendChild(row);
+            });
+
+            const addBtn = document.getElementById('add-step-btn');
+            if(addBtn) addBtn.style.display = sequenceSteps.length >= 5 ? 'none' : 'inline-block';
+        }
+
+        function addStepRow() {
+            if (sequenceSteps.length < 5) {
+                sequenceSteps.push({ action: 'FORWARD', val: 1.0, speed: 'auto' });
+                renderStepRows();
+            }
+        }
+
+        function clearStepRows() {
+            sequenceSteps = [];
+            renderStepRows();
+        }
+
+        function sendGlobalSpeed() {
+            const slider = document.getElementById('global-speed-slider');
+            const val = parseInt(slider.value);
+            document.getElementById('global-speed-val').innerText = val + '%';
+            if(ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({command: 'SET_GLOBAL_SPEED', global_speed: val}));
+            }
+        }
+
+        function sendCalibration() {
+            const val = parseFloat(document.getElementById('cal-speed-input').value);
+            if(ws && ws.readyState === WebSocket.OPEN && !isNaN(val)) {
+                ws.send(JSON.stringify({command: 'SET_CALIBRATION', speed_m_s: val}));
+            }
+        }
+
+        function runCalibrationTest() {
+            const speedVal = parseInt(document.getElementById('global-speed-slider').value) || 80;
+            if (confirm(`¿Iniciar prueba de calibración? El Rover avanzará durante 5 segundos exactos a ${speedVal}% de potencia.`)) {
+                if(ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({command: 'RUN_CALIBRATION_TEST', power: speedVal}));
+                }
+            }
+        }
+
+        function executeSequence() {
+            if (sequenceSteps.length === 0) {
+                alert('Agrega al menos un paso a la secuencia.');
+                return;
+            }
+            const calSpeed = parseFloat(document.getElementById('cal-speed-input').value) || 0.35;
+            const globalSpeed = parseInt(document.getElementById('global-speed-slider').value) || 80;
+
+            if(ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    command: 'EXECUTE_PROGRAM',
+                    steps: sequenceSteps,
+                    speed_m_s: calSpeed,
+                    global_speed: globalSpeed
+                }));
+            }
+        }
+
+        function abortSequence() {
+            if(ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({command: 'ABORT_PROGRAM'}));
+            }
+        }
 
         function connect() {
             ws = new WebSocket('ws://' + window.location.host + '/ws');
@@ -504,6 +690,31 @@
                         tiltCard.style.transform = `rotateX(${pitch}deg) rotateY(${roll}deg)`;
                     }
                 }
+
+                // Estado de Secuencia Programada
+                if(data.sequence_status !== undefined && data.sequence_status.message) {
+                    const statusBox = document.getElementById('seq-status-box');
+                    const statusTextEl = document.getElementById('seq-status-text');
+                    if(statusTextEl) statusTextEl.innerText = data.sequence_status.message;
+                    if (statusBox) {
+                        if (data.sequence_status.running) {
+                            statusBox.style.borderColor = 'var(--primary)';
+                            statusBox.style.background = 'rgba(0, 242, 254, 0.1)';
+                        } else {
+                            statusBox.style.borderColor = 'rgba(255,255,255,0.05)';
+                            statusBox.style.background = 'rgba(0,0,0,0.3)';
+                        }
+                    }
+                }
+
+                // Sincronización de parámetros de calibración y velocidad global
+                if (data.speed_m_s !== undefined && document.getElementById('cal-speed-input') && !document.activeElement.isSameNode(document.getElementById('cal-speed-input'))) {
+                    document.getElementById('cal-speed-input').value = data.speed_m_s;
+                }
+                if (data.global_speed !== undefined && document.getElementById('global-speed-slider') && !document.activeElement.isSameNode(document.getElementById('global-speed-slider'))) {
+                    document.getElementById('global-speed-slider').value = data.global_speed;
+                    document.getElementById('global-speed-val').innerText = data.global_speed + '%';
+                }
             };
         }
 
@@ -574,8 +785,10 @@
                 .catch(e => console.log('Error fetching version', e));
         }
 
+        renderStepRows();
         connect();
         fetchVersion();
     </script>
 </body>
 </html>
+

@@ -27,13 +27,12 @@ async def telemetry(request, ws):
 
         # Recibir comandos del cliente
         try:
-            # Usamos un timeout corto para no bloquear el bucle de telemetria
             message = await asyncio.wait_for(ws.receive(), timeout=0.1)
             data = json.loads(message)
             if 'command' in data:
                 cmd = data['command']
                 print(f"Comando recibido: {cmd}")
-                await handle_command(cmd)
+                await handle_command(cmd, data)
             if 'servo' in data:
                 angle = data['servo']
                 print(f"Moviendo servo a: {angle}")
@@ -44,16 +43,18 @@ async def telemetry(request, ws):
         except Exception as e:
             print(f"WS Error: {e}")
             sys.print_exception(e)
-            # No hacemos 'break' aquí para evitar que se caiga la conexión al dashboard por un mal input
 
-        # Enviar telemetria (distancia del sonar, datos del MPU-6050 y consumo de memoria RAM)
+        # Enviar telemetria (distancia, datos IMU, RAM y estado de secuencia)
         if rover_instance:
             dist = rover_instance.medir_distancia()
             mpu_data = rover_instance.leer_imu()
             payload = {
                 'distancia': dist,
                 'ram_free': gc.mem_free(),
-                'ram_alloc': gc.mem_alloc()
+                'ram_alloc': gc.mem_alloc(),
+                'sequence_status': getattr(rover_instance, 'sequence_status', {}),
+                'speed_m_s': getattr(rover_instance, 'speed_m_s', 0.35),
+                'global_speed': getattr(rover_instance, 'global_speed_pct', 80)
             }
             if mpu_data:
                 payload['mpu'] = mpu_data
@@ -68,21 +69,24 @@ async def telemetry(request, ws):
 
         await asyncio.sleep(0.2) # Frecuencia de actualizacion
 
-async def handle_command(cmd):
+async def handle_command(cmd, data=None):
     if not rover_instance:
         return
 
-    # Cancelar cualquier tarea de giro en segundo plano si se recibe un nuevo comando
-    if rover_instance.active_turn_task and not rover_instance.active_turn_task.done():
-        print("Cancelando giro anterior por comando de interrupcion")
-        rover_instance.active_turn_task.cancel()
-        rover_instance.active_turn_task = None
+    # Si es un comando manual o STOP, cancelamos secuencias o giros activos
+    if cmd in ['UP', 'DOWN', 'LEFT', 'RIGHT', 'STOP']:
+        if rover_instance.active_turn_task and not rover_instance.active_turn_task.done():
+            rover_instance.active_turn_task.cancel()
+            rover_instance.active_turn_task = None
+        if rover_instance.active_sequence_task and not rover_instance.active_sequence_task.done():
+            rover_instance.active_sequence_task.cancel()
+            rover_instance.active_sequence_task = None
 
     if cmd == 'UP':
-        rover_instance.set_motores(-80, 80) # Adelante
+        rover_instance.set_motores(-rover_instance.global_speed_pct, rover_instance.global_speed_pct) # Adelante
         rover_instance.set_led(0, 255, 0) # Verde moviendo
     elif cmd == 'DOWN':
-        rover_instance.set_motores(80, -80) # Atrás
+        rover_instance.set_motores(rover_instance.global_speed_pct, -rover_instance.global_speed_pct) # Atrás
         rover_instance.set_led(255, 165, 0) # Naranja reversa
     elif cmd == 'LEFT':
         rover_instance.set_motores(50, 50) # Giro Izquierda
@@ -95,6 +99,28 @@ async def handle_command(cmd):
         rover_instance.active_turn_task = asyncio.create_task(rover_instance.girar_grados(90))
     elif cmd == 'TURN_RIGHT_90':
         rover_instance.active_turn_task = asyncio.create_task(rover_instance.girar_grados(-90))
+    elif cmd == 'EXECUTE_PROGRAM':
+        steps = data.get('steps', []) if data else []
+        cal_speed = float(data.get('speed_m_s', rover_instance.speed_m_s)) if data else None
+        g_speed = int(data.get('global_speed', rover_instance.global_speed_pct)) if data else None
+        if rover_instance.active_sequence_task and not rover_instance.active_sequence_task.done():
+            rover_instance.active_sequence_task.cancel()
+        rover_instance.active_sequence_task = asyncio.create_task(
+            rover_instance.ejecutar_secuencia(steps, calibration_speed=cal_speed, global_speed=g_speed)
+        )
+    elif cmd == 'ABORT_PROGRAM':
+        asyncio.create_task(rover_instance.abortar_secuencia())
+    elif cmd == 'RUN_CALIBRATION_TEST':
+        power = int(data.get('power', 80)) if data else 80
+        if rover_instance.active_sequence_task and not rover_instance.active_sequence_task.done():
+            rover_instance.active_sequence_task.cancel()
+        rover_instance.active_sequence_task = asyncio.create_task(rover_instance.ejecutar_calibracion_5s(power))
+    elif cmd == 'SET_CALIBRATION':
+        if data and 'speed_m_s' in data:
+            rover_instance.speed_m_s = float(data['speed_m_s'])
+    elif cmd == 'SET_GLOBAL_SPEED':
+        if data and 'global_speed' in data:
+            rover_instance.global_speed_pct = int(data['global_speed'])
 
 @app.route('/version')
 async def get_version(request):
