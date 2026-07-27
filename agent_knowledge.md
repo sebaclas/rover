@@ -13,6 +13,14 @@
   ```
 - **Temporary Files**: Remember to redirect JSON output files to the `.scratch/` directory (never the project root) and use `view_file` to read them to prevent encoding/truncation errors.
 
+## UTF-8 Encoding Standard (Windows Environment)
+- **Constraint / Issue**: Windows PowerShell (5.1) defaults to writing files in **UTF-16 LE** (with BOM) when using standard redirection operators (`>`) or default `Out-File`. UTF-16 LE corrupts tool parsing for Git (`.gitignore`), Node.js (`OpenSpec`), Python, and MicroPython.
+- **Actionable Guideline**:
+  1. **Standard**: All project files (`.py`, `.json`, `.md`, `.gitignore`, etc.) MUST be encoded in **UTF-8 without BOM** (`utf-8`).
+  2. **File creation via agent**: Always use file tools (`write_to_file`) or Git Bash (`& 'C:\Program Files\Git\bin\bash.exe' -c 'command > file'`) for file redirection, as Bash redirection always uses UTF-8. NEVER use native PowerShell `>` redirection operator for text files.
+  3. **Repository enforcement**: Keep `.gitattributes` configured with `encoding=utf-8` for all text files.
+
+
 ## Git Version Control Routine
 - **Constraint / Issue**: Modifying code without committing existing functional changes can lead to cluttered diffs, lost progress, or difficulties in tracking changes.
 - **Actionable Guideline**: Before implementing a new feature, proposing a plan, or making any changes to files:
